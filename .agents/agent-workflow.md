@@ -20,8 +20,8 @@ generated-client, migration, or verification output.
 
 ## Correct example
 
-After editing a schema, an agent asks the human to run `npm run migration:create -- --name ...`, then
-reviews the returned SQL before suggesting deployment.
+After editing a schema, an agent asks the human to run `npm run migration:diff`, then
+reviews the returned SQL before suggesting a version-controlled migration and deployment.
 
 ## Common mistakes
 
