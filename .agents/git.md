@@ -54,7 +54,7 @@ Examples: `feat(db): add tenant transaction context`, `fix(config): load local p
 
 Notes:
 
-- `.gitignore` ignores `.env*` but allows `.env.local.example`, `.env.production.example`, `.env.migrations.local.example`, and `.env.test.local.example`. These templates never contain credentials or environment-specific secret values.
+- `.gitignore` ignores `.env*` but allows only `.env.local.example` and `.env.production.example`. These templates never contain credentials or environment-specific secret values.
 - `package-lock.json` changes only through the developer's npm commands and is committed right after the matching `package.json` commit.
 - The `.agents/skills/`, `.claude/skills/`, and `.windsurf/skills/` directories and `skills-lock.json` are agent tooling; committing them is the developer's choice.
 
