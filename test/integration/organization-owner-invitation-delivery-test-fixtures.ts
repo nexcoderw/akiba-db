@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { PrismaService } from '../../src/database/prisma.service.js';
 import {
-	assertTestDatabaseWasVerified,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	assertDevelopmentDatabaseWasVerified,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
 const transactionOptions = { maxWait: 10_000, timeout: 20_000 } as const;
 
@@ -12,15 +12,18 @@ const transactionOptions = { maxWait: 10_000, timeout: 20_000 } as const;
 export class OrganizationOwnerInvitationDeliveryTestFixtures {
 	readonly #deliveryIds = new Set<string>();
 
-	reserveDeliveryId(verifiedDatabase: VerifiedTestDatabase): string {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	reserveDeliveryId(verifiedDatabase: VerifiedDevelopmentDatabase): string {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 		const id = randomUUID();
 		this.#deliveryIds.add(id);
 		return id;
 	}
 
-	async cleanup(prisma: PrismaService, verifiedDatabase: VerifiedTestDatabase): Promise<void> {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	async cleanup(
+		prisma: PrismaService,
+		verifiedDatabase: VerifiedDevelopmentDatabase,
+	): Promise<void> {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 		const deliveryIds = [...this.#deliveryIds];
 		if (deliveryIds.length === 0) return;
 
