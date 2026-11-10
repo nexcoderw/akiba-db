@@ -55,6 +55,6 @@ describe('organization owner invitation hardening migration', () => {
 			/REVOKE ALL ON TYPE[\s\S]+organization_owner_invitation_status[\s\S]+organization_ownership_audit_action[\s\S]+FROM PUBLIC/u,
 		);
 		expect(source).not.toMatch(/\bGRANT\b/u);
-		expect(source).not.toMatch(/\bgym_(?:app|test)\b/u);
+		expect(source).not.toMatch(/\bakiba_(?:app|test)\b/u);
 	});
 });
