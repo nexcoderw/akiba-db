@@ -5,7 +5,7 @@ import { TenantTransactionService } from '../../src/database/tenant-transaction.
 describe('DatabaseModule', () => {
 	it('exports the database services without controllers', () => {
 		const module = DatabaseModule.forRoot({
-			databaseUrl: 'postgresql://localhost/nexcode_gym',
+			databaseUrl: 'postgresql://localhost/akiba',
 			poolMax: 1,
 			connectionTimeoutMilliseconds: 1_000,
 		});
