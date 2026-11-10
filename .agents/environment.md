@@ -10,8 +10,10 @@ database and managed owner. Pooled and direct URLs are two connection methods to
 Provide only `.env.local.example` and `.env.production.example`; actual files remain ignored. Runtime
 uses `DATABASE_URL`; administrative workflows use `DIRECT_DATABASE_URL` for the same database/owner.
 Load only the selected environment file. Accept complete injected production secrets without a file,
-require explicit production selection, reject mixed credentials and verify approved endpoints in
-`neon.environments.json` before connected tools run. Missing endpoint approvals fail closed.
+require explicit production selection, reject mixed credentials and verify the selected approved endpoint
+in `neon.environments.json` before connected tools run. A blank production hostname does not block an
+approved development command; production commands fail closed until their own endpoint is approved.
+When both endpoints are approved, they must be distinct.
 Use UTC storage and `Africa/Kigali` only for presentation/scheduling. Never log URLs or passwords.
 
 ## Forbidden patterns
