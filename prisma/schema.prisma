@@ -152,23 +152,24 @@ model Organization {
 /// Global login identity. An account has no platform privileges without an active PlatformStaff
 /// record and permissions obtained through explicit role assignments.
 model User {
-  id                          String                                  @id @default(uuid()) @db.Uuid
-  email                       String                                  @unique(map: "users_email_key") @db.Citext
-  displayName                 String                                  @map("display_name") @db.VarChar(160)
-  status                      UserStatus                              @default(PENDING)
-  emailVerifiedAt             DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
-  identityVersion             Int                                     @default(1) @map("identity_version")
-  createdAt                   DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                   DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  passwordCredential          PasswordCredential?
-  platformStaff               PlatformStaff?
-  organizationMemberships     OrganizationMembership[]
-  ownerEnrollmentChallenges   OrganizationOwnerEnrollmentChallenge[]
-  ownerAcceptanceAuditEvents  OrganizationOwnerAcceptanceAuditEvent[]
-  ownerSessions               OwnerSession[]
-  emailVerificationChallenges UserEmailVerificationChallenge[]
-  identitySecurityEvents      IdentitySecurityAuditEvent[]            @relation("identity_audit_subject")
-  identitySecurityActions     IdentitySecurityAuditEvent[]            @relation("identity_audit_actor")
+  id                              String                                  @id @default(uuid()) @db.Uuid
+  email                           String                                  @unique(map: "users_email_key") @db.Citext
+  displayName                     String                                  @map("display_name") @db.VarChar(160)
+  status                          UserStatus                              @default(PENDING)
+  emailVerifiedAt                 DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
+  identityVersion                 Int                                     @default(1) @map("identity_version")
+  createdAt                       DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                       DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordCredential              PasswordCredential?
+  platformStaff                   PlatformStaff?
+  organizationMemberships         OrganizationMembership[]
+  organizationAuthorizationEvents OrganizationAuthorizationAuditEvent[]
+  ownerEnrollmentChallenges       OrganizationOwnerEnrollmentChallenge[]
+  ownerAcceptanceAuditEvents      OrganizationOwnerAcceptanceAuditEvent[]
+  ownerSessions                   OwnerSession[]
+  emailVerificationChallenges     UserEmailVerificationChallenge[]
+  identitySecurityEvents          IdentitySecurityAuditEvent[]            @relation("identity_audit_subject")
+  identitySecurityActions         IdentitySecurityAuditEvent[]            @relation("identity_audit_actor")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -178,19 +179,22 @@ model User {
 /// lifecycle timestamps are metadata and do not independently grant access. A revoked identity
 /// remains unique so rejoining requires an explicitly reviewed workflow.
 model OrganizationMembership {
-  id                         String                                  @id(map: "organization_memberships_pkey") @default(uuid()) @db.Uuid
-  organizationId             String                                  @map("organization_id") @db.Uuid
-  userId                     String                                  @map("user_id") @db.Uuid
-  status                     OrganizationMembershipStatus            @default(PENDING)
-  createdAt                  DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  activatedAt                DateTime?                               @map("activated_at") @db.Timestamptz(6)
-  suspendedAt                DateTime?                               @map("suspended_at") @db.Timestamptz(6)
-  revokedAt                  DateTime?                               @map("revoked_at") @db.Timestamptz(6)
-  organization               Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_memberships_organization_fkey")
-  user                       User                                    @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_memberships_user_fkey")
-  roles                      OrganizationMembershipRole[]
-  ownerAcceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
+  id                          String                                  @id(map: "organization_memberships_pkey") @default(uuid()) @db.Uuid
+  organizationId              String                                  @map("organization_id") @db.Uuid
+  userId                      String                                  @map("user_id") @db.Uuid
+  status                      OrganizationMembershipStatus            @default(PENDING)
+  createdAt                   DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  activatedAt                 DateTime?                               @map("activated_at") @db.Timestamptz(6)
+  suspendedAt                 DateTime?                               @map("suspended_at") @db.Timestamptz(6)
+  revokedAt                   DateTime?                               @map("revoked_at") @db.Timestamptz(6)
+  organization                Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_memberships_organization_fkey")
+  user                        User                                    @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_memberships_user_fkey")
+  roles                       OrganizationMembershipRole[]
+  authorizationVersion        Int                                     @default(1) @map("authorization_version")
+  authorizationEventsAsActor  OrganizationAuthorizationAuditEvent[]   @relation("organization_authorization_actor")
+  authorizationEventsAsTarget OrganizationAuthorizationAuditEvent[]   @relation("organization_authorization_target_membership")
+  ownerAcceptanceAuditEvents  OrganizationOwnerAcceptanceAuditEvent[]
 
   @@unique([organizationId, userId], map: "organization_memberships_organization_user_key")
   @@unique([organizationId, id], map: "organization_memberships_organization_id_key")
@@ -205,18 +209,23 @@ model OrganizationMembership {
 /// policy but grants nothing by itself; SQL CHECK constraints reserve the `owner` key against custom
 /// role impersonation and validate bounded lowercase role identifiers.
 model OrganizationRole {
-  id             String                       @id(map: "organization_roles_pkey") @default(uuid()) @db.Uuid
-  organizationId String                       @map("organization_id") @db.Uuid
-  key            String                       @db.VarChar(63)
-  name           String                       @db.VarChar(120)
-  description    String?                      @db.VarChar(500)
-  isSystem       Boolean                      @default(false) @map("is_system")
-  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_roles_organization_fkey")
-  memberships    OrganizationMembershipRole[]
+  id                   String                                @id(map: "organization_roles_pkey") @default(uuid()) @db.Uuid
+  organizationId       String                                @map("organization_id") @db.Uuid
+  key                  String                                @db.VarChar(63)
+  name                 String                                @db.Citext
+  description          String?                               @db.VarChar(500)
+  isSystem             Boolean                               @default(false) @map("is_system")
+  isActive             Boolean                               @default(true) @map("is_active")
+  authorizationVersion Int                                   @default(1) @map("authorization_version")
+  createdAt            DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization                          @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_roles_organization_fkey")
+  memberships          OrganizationMembershipRole[]
+  permissions          OrganizationRolePermission[]
+  authorizationEvents  OrganizationAuthorizationAuditEvent[]
 
   @@unique([organizationId, key], map: "organization_roles_organization_key_key")
+  @@unique([organizationId, name], map: "organization_roles_organization_name_key")
   @@unique([organizationId, id], map: "organization_roles_organization_id_key")
   @@index([organizationId, isSystem, createdAt(sort: Desc), id], map: "organization_roles_org_system_created_id_idx")
   @@map("organization_roles")
@@ -235,6 +244,53 @@ model OrganizationMembershipRole {
   @@id([organizationId, organizationMembershipId, organizationRoleId], map: "organization_membership_roles_pkey")
   @@index([organizationId, organizationRoleId, organizationMembershipId], map: "organization_membership_roles_org_role_membership_idx")
   @@map("organization_membership_roles")
+}
+
+/// Version-controlled capability names. Organization roles may reference only this catalog;
+/// no custom role can define a new permission key or reference platform permissions.
+model OrganizationPermission {
+  id          String                       @id(map: "organization_permissions_pkey") @default(uuid()) @db.Uuid
+  key         String                       @unique(map: "organization_permissions_key_key") @db.VarChar(80)
+  description String                       @db.VarChar(500)
+  createdAt   DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  roles       OrganizationRolePermission[]
+
+  @@map("organization_permissions")
+}
+
+/// Composite tenant key prevents a mapping from naming a role in another organization.
+model OrganizationRolePermission {
+  organizationId           String                 @map("organization_id") @db.Uuid
+  organizationRoleId       String                 @map("organization_role_id") @db.Uuid
+  organizationPermissionId String                 @map("organization_permission_id") @db.Uuid
+  grantedAt                DateTime               @default(now()) @map("granted_at") @db.Timestamptz(6)
+  organizationRole         OrganizationRole       @relation(fields: [organizationId, organizationRoleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_role_permissions_role_fkey")
+  organizationPermission   OrganizationPermission @relation(fields: [organizationPermissionId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_role_permissions_permission_fkey")
+
+  @@id([organizationId, organizationRoleId, organizationPermissionId], map: "organization_role_permissions_pkey")
+  @@index([organizationPermissionId], map: "organization_role_permissions_permission_idx")
+  @@map("organization_role_permissions")
+}
+
+/// Append-only actor and target facts; no raw tokens, credentials or free-form metadata.
+model OrganizationAuthorizationAuditEvent {
+  id                 String                  @id(map: "organization_authorization_audit_events_pkey") @default(uuid()) @db.Uuid
+  organizationId     String                  @map("organization_id") @db.Uuid
+  actorMembershipId  String                  @map("actor_membership_id") @db.Uuid
+  actorUserId        String                  @map("actor_user_id") @db.Uuid
+  targetMembershipId String?                 @map("target_membership_id") @db.Uuid
+  targetRoleId       String?                 @map("target_role_id") @db.Uuid
+  action             String                  @db.VarChar(40)
+  requestId          String                  @map("request_id") @db.VarChar(80)
+  occurredAt         DateTime                @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorMembership    OrganizationMembership  @relation("organization_authorization_actor", fields: [organizationId, actorMembershipId, actorUserId], references: [organizationId, id, userId], onDelete: Restrict, onUpdate: Restrict, map: "organization_authorization_audit_actor_fkey")
+  targetMembership   OrganizationMembership? @relation("organization_authorization_target_membership", fields: [organizationId, targetMembershipId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_authorization_audit_target_membership_fkey")
+  targetRole         OrganizationRole?       @relation(fields: [organizationId, targetRoleId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_authorization_audit_target_role_fkey")
+  actorUser          User                    @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_authorization_audit_actor_user_fkey")
+
+  @@index([organizationId, occurredAt(sort: Desc), id], map: "organization_authorization_audit_org_time_idx")
+  @@index([organizationId, actorMembershipId, occurredAt(sort: Desc), id], map: "organization_authorization_audit_org_actor_time_idx")
+  @@map("organization_authorization_audit_events")
 }
 
 /// A platform-authorized offer to begin owner onboarding. This record grants no membership,
