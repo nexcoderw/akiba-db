@@ -47,7 +47,7 @@ export function assertDevelopmentDatabaseWasVerified(
 
 export function loadDevelopmentDatabaseConfig(
 	environment: NodeJS.ProcessEnv = process.env,
-	targets: ApprovedTargets = readApprovedTargets(),
+	targets: ApprovedTargets = readApprovedTargets('development'),
 ): DevelopmentDatabaseSafetyConfig {
 	const config = validateNeonEnvironment('development', environment, targets);
 	const coordinatorPid = Number(environment.AKIBA_INTEGRATION_COORDINATOR_PID);
