@@ -7,7 +7,7 @@ Expose useful database failure categories without leaking sensitive implementati
 ## Mandatory engineering requirements
 
 Fail configuration early. Preserve original errors internally, map known Prisma/PostgreSQL constraint
-failures to stable database-layer categories only when consumers benefit, and let `gym-api` decide HTTP
+failures to stable database-layer categories only when consumers benefit, and let `akiba-api` decide HTTP
 responses. Log correlation and safe metadata, never queries with secrets or personal data. Roll back
 failed transactions and make retry decisions explicit and bounded.
 
