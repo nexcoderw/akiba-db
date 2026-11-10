@@ -18,8 +18,8 @@ unmeasured indexes, offset pagination at large depth, or per-request Prisma clie
 
 ## Correct example
 
-List Remera members using an organization/branch/cursor compound index and a documented maximum page
-size.
+List Remera organization memberships using an organization/cursor compound index and a documented
+maximum page size.
 
 ## Common mistakes
 
