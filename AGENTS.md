@@ -9,3 +9,8 @@ and database package APIs. It must not acquire controllers, HTTP endpoints, auth
 inventory business workflows. Agents must never install dependencies, generate Prisma artifacts, run builds,
 formatters, linters, tests, migrations, servers, Git writes, or package publication. Prepare exact
 commands for a human instead. See `.agents/agent-workflow.md` for the complete restriction list.
+
+Use exactly the development and production Neon branches, their existing default database and managed
+owner. Follow `.agents/environment.md`, `.agents/migrations.md` and `.agents/testing.md` for guarded
+endpoint selection, shadow-free SQL review and development-only integration tests. Owner connections
+are not proof of tenant isolation; preserve all tenant context and database integrity controls.
