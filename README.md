@@ -81,9 +81,12 @@ cp .env.local.example .env.local
 
 Fill the two URLs privately. Then an operator must verify each branch in Neon and fill
 `neon.environments.json` with its direct hostname, default database and existing managed username.
-Connected commands fail until both distinct endpoints are approved; a blank hostname means that branch
-has not been approved. Pooled and direct hosts from one URL pair identify the same branch and cannot
-fill both entries. This file contains identities, never passwords or complete connection URLs. It prevents
+Development commands require the approved development endpoint and matching pooled/direct credentials;
+they can run while the production hostname is blank. Production commands require their own independently
+approved endpoint and injected credentials. Once both are filled, their direct hosts must differ. A blank
+hostname means that branch has not been approved. Pooled and direct hosts from one URL pair identify the
+same branch and cannot fill both entries. This file contains identities, never passwords or complete
+connection URLs. It prevents
 a production URL mislabeled as development (or the reverse) from being accepted. Protect review of
 this trust configuration; it is not a live Neon API attestation and must be updated when endpoints change.
 
