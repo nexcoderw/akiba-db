@@ -18,12 +18,12 @@ import { AuditTestFixtures } from './audit-test-fixtures.js';
 import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 
 const options = { maxWait: 10_000, timeout: 20_000 };
 const approvedKeys = [
@@ -49,7 +49,7 @@ jest.setTimeout(60_000);
 describe('durable organization and authorization audit', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let audits = new AuditTestFixtures();
 	let organizations = new OrganizationTestFixtures();
 	let identities = new PlatformAdminTestFixtures();
@@ -61,7 +61,7 @@ describe('durable organization and authorization audit', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const checks = await prisma.$queryRaw<{ name: string }[]>`
 			SELECT conname AS name FROM pg_catalog.pg_constraint
 			WHERE conrelid IN (to_regclass('public.organizations'),
@@ -110,7 +110,7 @@ describe('durable organization and authorization audit', () => {
 		await module?.close();
 	});
 
-	function requireVerified(): VerifiedTestDatabase {
+	function requireVerified(): VerifiedDevelopmentDatabase {
 		if (verified === undefined) throw new Error('Audit test prerequisites did not pass.');
 		return verified;
 	}
