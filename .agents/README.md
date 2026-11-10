@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-These rules govern all human and automated work in `@nexcoderw/gym-db`. Human instructions rank
+These rules govern all human and automated work in `@nexcoderw/akiba-db`. Human instructions rank
 first, then `AGENTS.md`/`CLAUDE.md`, this index, the topic rules below, and tool defaults. When rules
 appear to conflict, choose the safer database, privacy, and migration interpretation and ask a human.
 
