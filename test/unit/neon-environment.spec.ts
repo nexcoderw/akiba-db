@@ -4,12 +4,55 @@ import { join } from 'node:path';
 
 import {
 	loadNeonEnvironment,
+	NeonEnvironmentError,
+	neonCommandErrorMessage,
 	parseApprovedTargets,
 	validateNeonEnvironment,
 } from '../../scripts/neon-environment.mjs';
 import { approvedTargets, neonEnvironment } from './neon-environment-fixtures.js';
 
 describe('Neon branch selection', () => {
+	it('reports the unapproved branch through safe command diagnostics', () => {
+		try {
+			parseApprovedTargets({
+				development: approvedTargets.development,
+				production: { ...approvedTargets.production, directHost: '' },
+			});
+			throw new Error('Expected the missing production approval to be rejected.');
+		} catch (error: unknown) {
+			expect(error).toBeInstanceOf(NeonEnvironmentError);
+			expect(neonCommandErrorMessage(error)).toBe(
+				'Approve the production Neon direct hostname, default database and managed owner first.',
+			);
+		}
+	});
+
+	it.each(['ENOTFOUND', '28P01', '42501', 'unrecognized-code'])(
+		'redacts provider messages and connection details for %s',
+		(code) => {
+			const failure = Object.assign(
+				new Error('postgresql://user:synthetic-secret@private.invalid/db'),
+				{ code, detail: 'SQL and credential details must stay private' },
+			);
+			const message = neonCommandErrorMessage(failure);
+			expect(message).not.toMatch(/postgresql|synthetic-secret|private\.invalid|SQL/u);
+			expect(message).not.toContain(code);
+		},
+	);
+
+	it('does not echo unknown error codes or untyped connection failures', () => {
+		for (const failure of [
+			new Error('synthetic-secret'),
+			{ code: 'synthetic-secret', message: 'synthetic-secret' },
+			'synthetic-secret',
+			null,
+		]) {
+			expect(neonCommandErrorMessage(failure)).toBe(
+				'Database command failed. Check protected connection settings and database availability.',
+			);
+		}
+	});
+
 	it.each(['development', 'production'] as const)(
 		'accepts matching pooled/direct connections for %s',
 		(selected) => {
