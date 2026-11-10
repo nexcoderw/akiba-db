@@ -17,13 +17,13 @@ import { OrganizationOwnerInvitationTestFixtures } from './organization-owner-in
 import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
 	verifyTestTablePrivileges,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const transactionOptions = { maxWait: 30_000, timeout: 60_000 } as const;
 const requiredChecks = [
 	'organization_owner_invitations_email_check',
@@ -39,7 +39,7 @@ jest.setTimeout(180_000);
 describe('organization owner invitation and ownership audit foundation', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let organizations: OrganizationTestFixtures;
 	let identities: PlatformAdminTestFixtures;
 	let invitations: OrganizationOwnerInvitationTestFixtures;
@@ -57,7 +57,7 @@ describe('organization owner invitation and ownership audit foundation', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const [tables, checks, indexes, triggers] = await Promise.all([
 			prisma.$queryRaw<{ name: string | null }[]>`
 				SELECT unnest(ARRAY[
@@ -134,8 +134,9 @@ describe('organization owner invitation and ownership audit foundation', () => {
 		await module?.close();
 	});
 
-	function requireVerified(): VerifiedTestDatabase {
-		if (verified === undefined) throw new Error('Owner invitation test database is not verified.');
+	function requireVerified(): VerifiedDevelopmentDatabase {
+		if (verified === undefined)
+			throw new Error('Owner invitation development database is not verified.');
 		return verified;
 	}
 
