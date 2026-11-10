@@ -276,3 +276,25 @@ Technical references: [Prisma 7 CLI](https://www.prisma.io/docs/orm/v7/reference
 [Neon connections](https://neon.com/docs/guides/prisma),
 [Neon managed roles](https://neon.com/docs/manage/roles), and
 [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
+
+## Tenant security diagnostics
+
+Human-only, read-only diagnostics on the existing approved development branch:
+
+```bash
+npm run security:tenant:audit
+```
+
+The command reuses the guarded pooled/direct environment approval, verifies the connected database
+and managed user, opens a read-only transaction and reports role attributes/memberships, table owners,
+RLS/FORCE RLS activation, policies and table privileges. It creates no role, database, schema or policy
+and accepts no production target/arguments. Exit 2 means the observed configuration blocks a database
+isolation claim; exit 1 means diagnostics failed. Even active RLS requires independent policy review.
+No diagnostic result has been produced during implementation.
+
+TenantTransactionService now captures validated IDs before scheduling and rejects nested calls in an
+asynchronous chain. Reuse the existing callback client instead of opening another tenant scope.
+Concurrent independent calls remain supported. These changes do not add RLS or authorize identities;
+API membership and explicit query predicates remain mandatory. Existing live rollback/pool and
+composite-relationship suites are retained under the guarded development runner. After human checks
+and committing these fixes, update the API CI database revision before releasing either package.
