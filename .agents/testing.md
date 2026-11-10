@@ -22,8 +22,8 @@ the database was not configured and independently verified.
 
 ## Correct example
 
-Verify the disposable database marker, insert fictional Soho Gym tenants with reserved fixture IDs,
-and prove Kimihurura context cannot access Remera records belonging to another organization.
+Verify the disposable database marker, insert fictional Kimihurura Supplies tenants with reserved
+fixture IDs, and prove Kimihurura context cannot access Remera records belonging to another organization.
 
 ## Common mistakes
 
