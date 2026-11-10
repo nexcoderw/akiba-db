@@ -6,7 +6,7 @@ const REFERENCE_DATABASE_URLS = [
 	'DIRECT_DATABASE_URL',
 	'SHADOW_DATABASE_URL',
 ] as const;
-const TEST_DATABASE_COMMENT_PREFIX = 'nexcode-gym:disposable-integration-test:';
+const TEST_DATABASE_COMMENT_PREFIX = 'akiba:disposable-integration-test:';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const UNSAFE_NAME_PATTERN = /(?:^|[._-])(?:prod|production|live)(?:[._-]|$)/iu;
 
@@ -283,7 +283,7 @@ export async function verifyTestTablePrivileges(
 		};
 		throw new Error(
 			`The restricted integration-test role is missing ${missing.privileges} on ` +
-				`public.${missing.table_name}. Apply the reviewed gym_test-only grants before running tests.`,
+				`public.${missing.table_name}. Apply the reviewed akiba_test-only grants before running tests.`,
 		);
 	}
 }
