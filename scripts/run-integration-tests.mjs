@@ -2,15 +2,27 @@ import { spawn } from 'node:child_process';
 
 import pg from 'pg';
 
-import { coordinatorName, verifyDevelopmentSession } from './development-session.mjs';
+import {
+	coordinatorName,
+	verifyDevelopmentCoordinatorLease,
+	verifyDevelopmentSession,
+} from './development-session.mjs';
 import { loadNeonEnvironment, repositoryRoot } from './neon-environment.mjs';
 
 /** @type {import('pg').Client | undefined} */
 let coordinator;
 /** @type {import('node:child_process').ChildProcess | undefined} */
 let child;
-const state = { lostConnection: false };
+/** @type {ReturnType<typeof setInterval> | undefined} */
+let heartbeat;
+const state = { lostConnection: false, heartbeatInFlight: false, finished: false };
 const connectionWasLost = () => state.lostConnection;
+function coordinatorLost() {
+	if (state.lostConnection || state.finished) return;
+	state.lostConnection = true;
+	console.error('Development integration coordinator lost its verified lease.');
+	child?.kill('SIGTERM');
+}
 
 try {
 	if (process.argv.length !== 2)
@@ -23,14 +35,25 @@ try {
 	coordinator = new pg.Client({
 		connectionString: directUrl.toString(),
 		connectionTimeoutMillis: 10_000,
+		keepAlive: true,
 	});
-	coordinator.on('error', () => {
-		state.lostConnection = true;
-		child?.kill('SIGTERM');
-	});
+	coordinator.on('error', coordinatorLost);
 	await coordinator.connect();
 	const pid = await verifyDevelopmentSession(coordinator, config, repositoryRoot);
 	if (connectionWasLost()) throw new Error('The development integration coordinator disconnected.');
+	const verifiedCoordinator = coordinator;
+	heartbeat = setInterval(() => {
+		if (state.heartbeatInFlight || connectionWasLost() || state.finished) return;
+		state.heartbeatInFlight = true;
+		void verifyDevelopmentCoordinatorLease(verifiedCoordinator, pid)
+			.then((held) => {
+				if (!held) coordinatorLost();
+			})
+			.catch(() => coordinatorLost())
+			.finally(() => {
+				state.heartbeatInFlight = false;
+			});
+	}, 30_000);
 	child = spawn(
 		process.execPath,
 		[
@@ -54,6 +77,7 @@ try {
 			stdio: 'inherit',
 		},
 	);
+	if (connectionWasLost()) child.kill('SIGTERM');
 	process.once('SIGINT', () => child?.kill('SIGINT'));
 	process.once('SIGTERM', () => child?.kill('SIGTERM'));
 	/** @type {Promise<number>} */
@@ -64,6 +88,7 @@ try {
 		});
 	});
 	const status = await completion;
+	state.finished = true;
 	process.exitCode = connectionWasLost() ? 1 : status;
 } catch (error) {
 	// Driver errors may expose connection details; only authored guard messages are reported.
@@ -74,5 +99,6 @@ try {
 	console.error(message);
 	process.exitCode = 1;
 } finally {
+	if (heartbeat !== undefined) clearInterval(heartbeat);
 	await coordinator?.end();
 }
