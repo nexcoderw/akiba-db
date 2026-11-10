@@ -54,7 +54,8 @@
     "migration:check": "node scripts/database-command.mjs development check",
     "migration:production:status": "node scripts/database-command.mjs production status",
     "migration:production:check": "node scripts/database-command.mjs production check",
-    "migration:production:deploy": "node scripts/database-command.mjs production deploy"
+    "migration:production:deploy": "node scripts/database-command.mjs production deploy",
+    "security:tenant:audit": "node scripts/audit-tenant-security.mjs"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
