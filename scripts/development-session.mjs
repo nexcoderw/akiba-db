@@ -80,3 +80,23 @@ export async function verifyDevelopmentSession(client, config, root) {
 	}
 	return row.pid;
 }
+
+/**
+ * Keep the long-running coordinator active and prove that its original session still owns the
+ * lease. A failed check must stop fixture writers; it must never reacquire a lost lease.
+ * @param {import('pg').Client} client
+ * @param {number} expectedPid
+ */
+export async function verifyDevelopmentCoordinatorLease(client, expectedPid) {
+	const result = await client.query(
+		`SELECT pg_backend_pid() AS pid, EXISTS (
+			SELECT 1 FROM pg_catalog.pg_locks
+			WHERE pid = pg_backend_pid() AND locktype = 'advisory' AND granted
+				AND mode = 'ExclusiveLock' AND classid = $1::oid AND objid = $2::oid
+				AND objsubid = 2
+		) AS held`,
+		[...integrationLock],
+	);
+	const lease = record(result.rows[0]);
+	return lease.pid === expectedPid && lease.held === true;
+}
