@@ -1,6 +1,6 @@
 {
   "development": {
-    "directHost": "",
+    "directHost": "ep-crimson-hat-bdn4hjtp.c-8.us-east-2.aws.neon.tech",
     "database": "neondb",
     "user": "neondb_owner"
   },
