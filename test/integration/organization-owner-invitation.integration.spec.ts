@@ -140,7 +140,7 @@ describe('organization owner invitation and ownership audit foundation', () => {
 	}
 
 	async function createOrganization(
-		name = 'Soho Gym',
+		name = 'Kimihurura Supplies',
 		status: OrganizationStatus = OrganizationStatus.PENDING,
 	): Promise<string> {
 		const fixture = organizations.reserve(requireVerified());
@@ -255,7 +255,7 @@ describe('organization owner invitation and ownership audit foundation', () => {
 
 	it('enforces normalized bounded recipient data and immutable invitation identity', async () => {
 		const organizationId = await createOrganization();
-		const otherOrganizationId = await createOrganization('Power Gym');
+		const otherOrganizationId = await createOrganization('Remera Trading');
 		const actorId = await createActor();
 		const otherActorId = await createActor();
 		for (const change of [
@@ -336,11 +336,11 @@ describe('organization owner invitation and ownership audit foundation', () => {
 	it('allows the same intended owner in different organizations', async () => {
 		const actorId = await createActor();
 		await prisma.organizationOwnerInvitation.create({
-			data: invitationData(await createOrganization('Soho Gym'), actorId),
+			data: invitationData(await createOrganization('Kimihurura Supplies'), actorId),
 		});
 		await expect(
 			prisma.organizationOwnerInvitation.create({
-				data: invitationData(await createOrganization('Power Gym'), actorId),
+				data: invitationData(await createOrganization('Remera Trading'), actorId),
 			}),
 		).resolves.toMatchObject({ invitedEmail: 'owner@example.com' });
 	});
@@ -469,9 +469,9 @@ describe('organization owner invitation and ownership audit foundation', () => {
 
 	it('rejects cross-organization audit linkage and invalid action metadata', async () => {
 		const actorId = await createActor();
-		const soho = await createOrganization('Soho Gym');
-		const power = await createOrganization('Power Gym');
-		const invitation = invitationData(soho, actorId);
+		const kimihurura = await createOrganization('Kimihurura Supplies');
+		const power = await createOrganization('Remera Trading');
+		const invitation = invitationData(kimihurura, actorId);
 		await prisma.organizationOwnerInvitation.create({ data: invitation });
 
 		await expect(
@@ -482,7 +482,7 @@ describe('organization owner invitation and ownership audit foundation', () => {
 		await expect(
 			prisma.organizationOwnershipAuditEvent.create({
 				data: {
-					...auditData(soho, invitation.id, actorId),
+					...auditData(kimihurura, invitation.id, actorId),
 					action: OrganizationOwnershipAuditAction.INVITATION_REVOKED,
 				},
 			}),
