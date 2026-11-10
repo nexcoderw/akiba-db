@@ -159,4 +159,41 @@ describe('TenantTransactionService', () => {
 		expect(queryRaw.mock.calls[0]?.[1]).toBe(organizationId);
 		expect(queryRaw.mock.calls[1]?.[1]).toBe(branchId);
 	});
+	it('snapshots mutable input before the asynchronous operation begins', async () => {
+		const { service, queryRaw, transaction } = await createSubject();
+		transaction.mockImplementation(async (callback) => {
+			await Promise.resolve();
+			return callback({ $queryRaw: queryRaw });
+		});
+		const context = { organizationId: '11111111-1111-4111-8111-111111111111',
+			branchId: '22222222-2222-4222-8222-222222222222' };
+		const operation = service.run(context, () => Promise.resolve(undefined));
+		context.organizationId = '33333333-3333-4333-8333-333333333333';
+		context.branchId = '44444444-4444-4444-8444-444444444444';
+		await operation;
+		expect(queryRaw.mock.calls[0]?.[1]).toBe('11111111-1111-4111-8111-111111111111');
+		expect(queryRaw.mock.calls[1]?.[1]).toBe('22222222-2222-4222-8222-222222222222');
+	});
+
+	it('rejects nested scopes and allows an independent operation after failure', async () => {
+		const { service, transaction } = await createSubject();
+		const context = { organizationId: '11111111-1111-4111-8111-111111111111' };
+		await expect(service.run(context, () => service.run(context, () => Promise.resolve(undefined))))
+			.rejects.toThrow('Nested tenant transactions');
+		expect(transaction).toHaveBeenCalledTimes(1);
+		await expect(service.run(context, () => Promise.resolve('next'))).resolves.toBe('next');
+	});
+
+	it('keeps asynchronous nesting protection independent across parallel operations', async () => {
+		const { service } = await createSubject();
+		const run = (organizationId: string): Promise<string> => service.run({ organizationId }, async () => {
+			await Promise.resolve();
+			return organizationId;
+		});
+		await expect(Promise.all([
+			run('11111111-1111-4111-8111-111111111111'),
+			run('22222222-2222-4222-8222-222222222222'),
+		])).resolves.toEqual(['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']);
+	});
+
 });
