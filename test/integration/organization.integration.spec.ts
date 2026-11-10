@@ -140,7 +140,9 @@ describe('organization database foundation', () => {
 	it('creates a pending organization with UUID, UTC timestamps and no lifecycle activation', async () => {
 		const fixture = reserve();
 		const start = Date.now();
-		const row = await prisma.organization.create({ data: { ...fixture, name: 'Soho Gym' } });
+		const row = await prisma.organization.create({
+			data: { ...fixture, name: 'Kimihurura Supplies' },
+		});
 		expect(row.id).toMatch(
 			/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
 		);
@@ -157,7 +159,7 @@ describe('organization database foundation', () => {
 		// Check the Prisma default separately from fixtures that reserve an explicit UUID for cleanup.
 		const generated = await prisma.$transaction(async (transaction) => {
 			const result = await transaction.organization.create({
-				data: { name: 'Soho Gym', slug: reserve().slug },
+				data: { name: 'Kimihurura Supplies', slug: reserve().slug },
 			});
 			fixtures.track(requireVerified(), result);
 			await transaction.organization.delete({ where: { id: result.id } });
@@ -171,10 +173,10 @@ describe('organization database foundation', () => {
 
 	it('enforces constraints for raw SQL writers while accepting nonunique display names', async () => {
 		const first = reserve();
-		await expect(insertRaw(first, 'Power Gym')).resolves.toBe(1);
+		await expect(insertRaw(first, 'Remera Trading')).resolves.toBe(1);
 		await expect(
-			prisma.organization.create({ data: { ...reserve(), name: 'Power Gym' } }),
-		).resolves.toMatchObject({ name: 'Power Gym' });
+			prisma.organization.create({ data: { ...reserve(), name: 'Remera Trading' } }),
+		).resolves.toMatchObject({ name: 'Remera Trading' });
 	});
 
 	it.each(['', ' ', '\t\n\r', '\u00a0', '\u2003', '\u3000'])(
@@ -203,19 +205,19 @@ describe('organization database foundation', () => {
 		'a\nb',
 		'abc\n',
 	])('rejects invalid slug grammar in PostgreSQL: %s', async (slug) => {
-		await expect(insertRaw(reserve(slug), 'Kigali Fitness')).rejects.toThrow(
+		await expect(insertRaw(reserve(slug), 'Kigali Supplies')).rejects.toThrow(
 			'organizations_slug_format_check',
 		);
 	});
 
 	it('rejects slugs beyond the PostgreSQL varchar limit', async () => {
-		await expect(insertRaw(reserve('a'.repeat(64)), 'Kigali Fitness')).rejects.toMatchObject({
+		await expect(insertRaw(reserve('a'.repeat(64)), 'Kigali Supplies')).rejects.toMatchObject({
 			code: 'P2010',
 		});
 	});
 
 	it.each(RESERVED_SLUGS)('rejects reserved infrastructure slug: %s', async (slug) => {
-		await expect(insertRaw(reserve(slug), 'Kigali Fitness')).rejects.toThrow(
+		await expect(insertRaw(reserve(slug), 'Kigali Supplies')).rejects.toThrow(
 			'organizations_slug_reserved_check',
 		);
 	});
@@ -249,10 +251,10 @@ describe('organization database foundation', () => {
 	it('rejects duplicate slugs including after archival', async () => {
 		const fixture = reserve();
 		await prisma.organization.create({
-			data: { ...fixture, name: 'Soho Gym', status: OrganizationStatus.ARCHIVED },
+			data: { ...fixture, name: 'Kimihurura Supplies', status: OrganizationStatus.ARCHIVED },
 		});
 		await expect(
-			prisma.organization.create({ data: { ...reserve(fixture.slug), name: 'Power Gym' } }),
+			prisma.organization.create({ data: { ...reserve(fixture.slug), name: 'Remera Trading' } }),
 		).rejects.toMatchObject({ code: 'P2002' });
 	});
 
@@ -261,7 +263,7 @@ describe('organization database foundation', () => {
 		const second = reserve(first.slug);
 		const results = await Promise.allSettled(
 			[first, second].map((fixture) =>
-				prisma.organization.create({ data: { ...fixture, name: 'Power Gym' } }),
+				prisma.organization.create({ data: { ...fixture, name: 'Remera Trading' } }),
 			),
 		);
 		expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
@@ -272,7 +274,9 @@ describe('organization database foundation', () => {
 
 	it('persists lifecycle metadata without inventing authorization or transition rules', async () => {
 		const fixture = reserve();
-		const initial = await prisma.organization.create({ data: { ...fixture, name: 'Soho Gym' } });
+		const initial = await prisma.organization.create({
+			data: { ...fixture, name: 'Kimihurura Supplies' },
+		});
 		const time = new Date('2030-01-01T00:00:00.000Z');
 		for (const status of Object.values(OrganizationStatus)) {
 			const row = await prisma.organization.update({
@@ -290,7 +294,7 @@ describe('organization database foundation', () => {
 	});
 
 	it('rejects a status outside the PostgreSQL enum', async () => {
-		await expect(insertRaw(reserve(), 'Soho Gym', 'unknown')).rejects.toMatchObject({
+		await expect(insertRaw(reserve(), 'Kimihurura Supplies', 'unknown')).rejects.toMatchObject({
 			code: 'P2010',
 		});
 	});
@@ -300,7 +304,9 @@ describe('organization database foundation', () => {
 		const marker = new Error('rollback organization fixture');
 		await expect(
 			prisma.$transaction(async (transaction) => {
-				await transaction.organization.create({ data: { ...fixture, name: 'Soho Gym' } });
+				await transaction.organization.create({
+					data: { ...fixture, name: 'Kimihurura Supplies' },
+				});
 				throw marker;
 			}, transactionOptions),
 		).rejects.toBe(marker);
@@ -311,9 +317,9 @@ describe('organization database foundation', () => {
 		const sentinelSet = new OrganizationTestFixtures();
 		extraFixtures.push(sentinelSet);
 		const sentinel = sentinelSet.reserve(requireVerified());
-		await prisma.organization.create({ data: { ...sentinel, name: 'Kigali Fitness' } });
+		await prisma.organization.create({ data: { ...sentinel, name: 'Kigali Supplies' } });
 		const own = reserve();
-		await prisma.organization.create({ data: { ...own, name: 'Soho Gym' } });
+		await prisma.organization.create({ data: { ...own, name: 'Kimihurura Supplies' } });
 		await fixtures.cleanup(prisma, requireVerified());
 		await fixtures.cleanup(prisma, requireVerified());
 		expect(await prisma.organization.findUnique({ where: { id: own.id } })).toBeNull();
