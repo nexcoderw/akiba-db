@@ -50,88 +50,6 @@ enum OrganizationMembershipStatus {
   @@map("organization_membership_status")
 }
 
-enum MemberPeriodUnit {
-  DAYS   @map("days")
-  WEEKS  @map("weeks")
-  MONTHS @map("months")
-  YEARS  @map("years")
-
-  @@map("member_period_unit")
-}
-
-enum OrganizationMemberEmailSuppressionReason {
-  BOUNCE    @map("bounce")
-  COMPLAINT @map("complaint")
-  MANUAL    @map("manual")
-
-  @@map("organization_member_email_suppression_reason")
-}
-
-enum OrganizationMemberReminderKind {
-  THREE_DAYS_BEFORE @map("three_days_before")
-  EXPIRY_DAY        @map("expiry_day")
-  MANUAL            @map("manual")
-
-  @@map("organization_member_reminder_kind")
-}
-
-enum OrganizationMemberReminderChannel {
-  EMAIL @map("email")
-  SMS   @map("sms")
-
-  @@map("organization_member_reminder_channel")
-}
-
-enum OrganizationMemberReminderStatus {
-  QUEUED     @map("queued")
-  PROCESSING @map("processing")
-  ACCEPTED   @map("accepted")
-  DELIVERED  @map("delivered")
-  BOUNCED    @map("bounced")
-  FAILED     @map("failed")
-  UNCERTAIN  @map("uncertain")
-  SKIPPED    @map("skipped")
-
-  @@map("organization_member_reminder_status")
-}
-
-enum OrganizationPaymentMethod {
-  CASH          @map("cash")
-  MOBILE_MONEY  @map("mobile_money")
-  BANK_TRANSFER @map("bank_transfer")
-  CARD          @map("card")
-  OTHER         @map("other")
-
-  @@map("organization_payment_method")
-}
-
-enum OrganizationPaymentStatus {
-  PENDING            @map("pending")
-  CONFIRMED          @map("confirmed")
-  FAILED             @map("failed")
-  VOIDED             @map("voided")
-  PARTIALLY_REFUNDED @map("partially_refunded")
-  REFUNDED           @map("refunded")
-
-  @@map("organization_payment_status")
-}
-
-enum OrganizationPaymentRefundStatus {
-  PENDING   @map("pending")
-  CONFIRMED @map("confirmed")
-  FAILED    @map("failed")
-
-  @@map("organization_payment_refund_status")
-}
-
-enum OrganizationPaymentAuditAction {
-  PAYMENT_RECORDED @map("payment_recorded")
-  PAYMENT_VOIDED   @map("payment_voided")
-  REFUND_RECORDED  @map("refund_recorded")
-
-  @@map("organization_payment_audit_action")
-}
-
 enum OrganizationOwnerInvitationStatus {
   PENDING_DELIVERY @map("pending_delivery")
   SENT             @map("sent")
@@ -225,288 +143,27 @@ model Organization {
   ownershipAuditEvents       OrganizationOwnershipAuditEvent[]
   ownerEnrollmentChallenges  OrganizationOwnerEnrollmentChallenge[]
   ownerAcceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
-  membershipPlans            OrganizationMembershipPlan[]
-  members                    OrganizationMember[]
-  memberSubscriptions        OrganizationMemberSubscription[]
-  memberReminderDeliveries   OrganizationMemberReminderDelivery[]
-  payments                   OrganizationPayment[]
-  paymentAllocations         OrganizationPaymentAllocation[]
-  paymentRefunds             OrganizationPaymentRefund[]
-  paymentAuditEvents         OrganizationPaymentAuditEvent[]
 
   @@index([status, createdAt(sort: Desc), id], map: "organizations_status_created_at_id_idx")
   @@map("organizations")
 }
 
-/// Organization-owned commercial membership offer. Prices are exact whole Rwandan francs;
-/// description is optional free text for included activities. Archival retains historical identity
-/// so future member subscriptions can continue to reference the plan safely.
-model OrganizationMembershipPlan {
-  id             String                           @id(map: "organization_membership_plans_pkey") @default(uuid()) @db.Uuid
-  organizationId String                           @map("organization_id") @db.Uuid
-  name           String                           @db.VarChar(120)
-  normalizedName String                           @map("normalized_name") @db.VarChar(120)
-  priceRwf       BigInt                           @map("price_rwf")
-  description    String?                          @db.VarChar(1000)
-  archivedAt     DateTime?                        @map("archived_at") @db.Timestamptz(6)
-  createdAt      DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization   Organization                     @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_membership_plans_organization_fkey")
-  subscriptions  OrganizationMemberSubscription[]
-
-  @@unique([organizationId, normalizedName], map: "organization_membership_plans_org_name_key")
-  @@unique([organizationId, id], map: "organization_membership_plans_organization_id_key")
-  @@index([organizationId, archivedAt, createdAt(sort: Desc), id], map: "organization_membership_plans_org_archive_created_id_idx")
-  @@map("organization_membership_plans")
-}
-
-/// Gym customers, separate from login users and staff organization memberships.
-/// Normalized names and canonical E.164 phone numbers are unique within an organization.
-/// Reminder suppression timestamp and reason must be paired by a reviewed SQL CHECK constraint.
-model OrganizationMember {
-  id                             String                                    @id(map: "organization_members_pkey") @default(uuid()) @db.Uuid
-  organizationId                 String                                    @map("organization_id") @db.Uuid
-  name                           String                                    @db.VarChar(160)
-  normalizedName                 String                                    @map("normalized_name") @db.VarChar(160)
-  email                          String?                                   @db.Citext
-  reminderEmailOptedOutAt        DateTime?                                 @map("reminder_email_opted_out_at") @db.Timestamptz(6)
-  reminderEmailSuppressedAt      DateTime?                                 @map("reminder_email_suppressed_at") @db.Timestamptz(6)
-  reminderEmailSuppressionReason OrganizationMemberEmailSuppressionReason? @map("reminder_email_suppression_reason")
-  phoneNumber                    String                                    @map("phone_number") @db.VarChar(16)
-  archivedAt                     DateTime?                                 @map("archived_at") @db.Timestamptz(6)
-  createdAt                      DateTime                                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                      DateTime                                  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization                   Organization                              @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_members_org_fkey")
-  subscriptions                  OrganizationMemberSubscription[]
-  reminderDeliveries             OrganizationMemberReminderDelivery[]
-  payments                       OrganizationPayment[]
-
-  @@unique([organizationId, normalizedName], map: "organization_members_org_name_key")
-  @@unique([organizationId, phoneNumber], map: "organization_members_org_phone_key")
-  @@unique([organizationId, id], map: "organization_members_org_id_key")
-  @@index([organizationId, archivedAt, createdAt(sort: Desc), id], map: "organization_members_org_archive_created_idx")
-  @@map("organization_members")
-}
-
-/// A dated plan registration, not a provider-confirmed payment. End date is inclusive.
-/// Tenant-composite foreign keys prevent cross-gym member/plan links at the database boundary.
-/// Plan snapshots preserve agreed terms; cancellation retains history. Integrity CHECKs and
-/// a GiST exclusion constraint enforce dates and concurrent non-overlap in the migration.
-model OrganizationMemberSubscription {
-  id                 String                               @id(map: "member_subscriptions_pkey") @default(uuid()) @db.Uuid
-  organizationId     String                               @map("organization_id") @db.Uuid
-  memberId           String                               @map("member_id") @db.Uuid
-  membershipPlanId   String                               @map("membership_plan_id") @db.Uuid
-  planName           String                               @map("plan_name") @db.VarChar(120)
-  priceRwf           BigInt                               @map("price_rwf")
-  periodUnit         MemberPeriodUnit                     @map("period_unit")
-  periodCount        Int                                  @map("period_count")
-  startDate          DateTime                             @map("start_date") @db.Date
-  endDate            DateTime                             @map("end_date") @db.Date
-  idempotencyKey     String                               @map("idempotency_key") @db.Uuid
-  requestFingerprint String                               @map("request_fingerprint") @db.VarChar(64)
-  createdByUserId    String                               @map("created_by_user_id") @db.Uuid
-  cancelledAt        DateTime?                            @map("cancelled_at") @db.Timestamptz(6)
-  cancelledByUserId  String?                              @map("cancelled_by_user_id") @db.Uuid
-  createdAt          DateTime                             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization       Organization                         @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "member_subscriptions_org_fkey")
-  member             OrganizationMember                   @relation(fields: [organizationId, memberId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "member_subscriptions_member_fkey")
-  membershipPlan     OrganizationMembershipPlan           @relation(fields: [organizationId, membershipPlanId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "member_subscriptions_plan_fkey")
-  createdBy          User                                 @relation("MemberSubscriptionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "member_subscriptions_creator_fkey")
-  cancelledBy        User?                                @relation("MemberSubscriptionCanceller", fields: [cancelledByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "member_subscriptions_canceller_fkey")
-  paymentAllocations OrganizationPaymentAllocation[]
-  reminderDeliveries OrganizationMemberReminderDelivery[]
-
-  @@unique([organizationId, idempotencyKey], map: "member_subscriptions_org_idempotency_key")
-  @@unique([organizationId, id, memberId], map: "member_subscriptions_org_id_member_key")
-  @@index([organizationId, memberId, createdAt(sort: Desc), id], map: "member_subscriptions_org_member_created_idx")
-  @@index([organizationId, memberId, cancelledAt, startDate, endDate], map: "member_subscriptions_org_member_dates_idx")
-  @@index([organizationId, membershipPlanId], map: "member_subscriptions_org_plan_idx")
-  @@index([organizationId, endDate, id], map: "member_subscriptions_org_expiry_idx")
-  @@map("organization_member_subscriptions")
-}
-
-/// One durable delivery reservation per tenant, subscription, occasion and channel.
-/// Recipient and manager-composed message snapshots are operational PII; workers must recheck
-/// current eligibility before sending and retain/purge them under a reviewed policy.
-/// The migration must constrain nonnegative attempts and require a recipient for EMAIL rows.
-model OrganizationMemberReminderDelivery {
-  id                     String                            @id(map: "member_reminder_deliveries_pkey") @default(uuid()) @db.Uuid
-  organizationId         String                            @map("organization_id") @db.Uuid
-  memberId               String                            @map("member_id") @db.Uuid
-  memberSubscriptionId   String                            @map("member_subscription_id") @db.Uuid
-  kind                   OrganizationMemberReminderKind
-  channel                OrganizationMemberReminderChannel
-  status                 OrganizationMemberReminderStatus  @default(QUEUED)
-  dueDate                DateTime                          @map("due_date") @db.Date
-  recipientEmail         String?                           @map("recipient_email") @db.Citext
-  messageSubject         String?                           @map("message_subject") @db.VarChar(160)
-  messageBody            String?                           @map("message_body") @db.VarChar(4000)
-  attemptCount           Int                               @default(0) @map("attempt_count")
-  nextAttemptAt          DateTime?                         @map("next_attempt_at") @db.Timestamptz(6)
-  leaseExpiresAt         DateTime?                         @map("lease_expires_at") @db.Timestamptz(6)
-  providerIdempotencyKey String                            @unique(map: "member_reminder_deliveries_provider_key") @map("provider_idempotency_key") @db.VarChar(128)
-  providerMessageId      String?                           @unique(map: "member_reminder_deliveries_provider_message_key") @map("provider_message_id") @db.VarChar(128)
-  lastErrorCode          String?                           @map("last_error_code") @db.VarChar(63)
-  acceptedAt             DateTime?                         @map("accepted_at") @db.Timestamptz(6)
-  deliveredAt            DateTime?                         @map("delivered_at") @db.Timestamptz(6)
-  createdAt              DateTime                          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization           Organization                      @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "member_reminder_deliveries_org_fkey")
-  member                 OrganizationMember                @relation(fields: [organizationId, memberId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "member_reminder_deliveries_member_fkey")
-  subscription           OrganizationMemberSubscription    @relation(fields: [organizationId, memberSubscriptionId, memberId], references: [organizationId, id, memberId], onDelete: Restrict, onUpdate: Restrict, map: "member_reminder_deliveries_subscription_fkey")
-
-  @@unique([organizationId, memberSubscriptionId, kind, channel], map: "member_reminder_deliveries_once_per_kind_key")
-  @@index([status, nextAttemptAt, leaseExpiresAt, id], map: "member_reminder_deliveries_worker_idx")
-  @@index([organizationId, memberId, createdAt(sort: Desc), id], map: "member_reminder_deliveries_org_member_idx")
-  @@index([organizationId, dueDate, status, id], map: "member_reminder_deliveries_org_due_idx")
-  @@map("organization_member_reminder_deliveries")
-}
-
-/// Tenant-owned gym-member payment ledger. A registration is not payment evidence: cash is
-/// confirmed when recorded by an authorized owner, while external methods remain pending until a
-/// separately reviewed provider or reconciliation workflow verifies them.
-model OrganizationPayment {
-  id                 String                          @id(map: "organization_payments_pkey") @default(uuid()) @db.Uuid
-  organizationId     String                          @map("organization_id") @db.Uuid
-  memberId           String                          @map("member_id") @db.Uuid
-  receiptNumber      String                          @map("receipt_number") @db.VarChar(48)
-  amountRwf          BigInt                          @map("amount_rwf")
-  method             OrganizationPaymentMethod
-  status             OrganizationPaymentStatus       @default(PENDING)
-  providerReference  String?                         @map("provider_reference") @db.VarChar(120)
-  note               String?                         @db.VarChar(500)
-  occurredAt         DateTime                        @map("occurred_at") @db.Timestamptz(6)
-  confirmedAt        DateTime?                       @map("confirmed_at") @db.Timestamptz(6)
-  failedAt           DateTime?                       @map("failed_at") @db.Timestamptz(6)
-  voidedAt           DateTime?                       @map("voided_at") @db.Timestamptz(6)
-  voidReason         String?                         @map("void_reason") @db.VarChar(500)
-  idempotencyKey     String                          @map("idempotency_key") @db.Uuid
-  requestFingerprint String                          @map("request_fingerprint") @db.VarChar(64)
-  recordedByUserId   String                          @map("recorded_by_user_id") @db.Uuid
-  voidedByUserId     String?                         @map("voided_by_user_id") @db.Uuid
-  createdAt          DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_payments_org_fkey")
-  member             OrganizationMember              @relation(fields: [organizationId, memberId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_payments_member_fkey")
-  recordedBy         User                            @relation("PaymentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_payments_recorder_fkey")
-  voidedBy           User?                           @relation("PaymentVoider", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "organization_payments_voider_fkey")
-  allocations        OrganizationPaymentAllocation[]
-  refunds            OrganizationPaymentRefund[]
-  auditEvents        OrganizationPaymentAuditEvent[]
-
-  @@unique([organizationId, id], map: "organization_payments_org_id_key")
-  @@unique([organizationId, id, memberId], map: "organization_payments_org_id_member_key")
-  @@unique([organizationId, receiptNumber], map: "organization_payments_org_receipt_key")
-  @@unique([organizationId, idempotencyKey], map: "organization_payments_org_idempotency_key")
-  @@unique([organizationId, method, providerReference], map: "organization_payments_org_provider_ref_key")
-  @@index([organizationId, status, occurredAt(sort: Desc), id], map: "organization_payments_org_status_time_idx")
-  @@index([organizationId, method, occurredAt(sort: Desc), id], map: "organization_payments_org_method_time_idx")
-  @@index([organizationId, memberId, occurredAt(sort: Desc), id], map: "organization_payments_org_member_time_idx")
-  @@map("organization_payments")
-}
-
-/// Allocation rows keep payment money separate from registration terms and allow future split or
-/// installment collection without rewriting immutable payment evidence.
-model OrganizationPaymentAllocation {
-  id                   String                         @id(map: "organization_payment_allocations_pkey") @default(uuid()) @db.Uuid
-  organizationId       String                         @map("organization_id") @db.Uuid
-  paymentId            String                         @map("payment_id") @db.Uuid
-  memberId             String                         @map("member_id") @db.Uuid
-  memberSubscriptionId String                         @map("member_subscription_id") @db.Uuid
-  amountRwf            BigInt                         @map("amount_rwf")
-  createdAt            DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
-  organization         Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_allocations_org_fkey")
-  payment              OrganizationPayment            @relation(fields: [organizationId, paymentId, memberId], references: [organizationId, id, memberId], onDelete: Restrict, onUpdate: Restrict, map: "payment_allocations_payment_fkey")
-  memberSubscription   OrganizationMemberSubscription @relation(fields: [organizationId, memberSubscriptionId, memberId], references: [organizationId, id, memberId], onDelete: Restrict, onUpdate: Restrict, map: "payment_allocations_subscription_fkey")
-
-  @@unique([organizationId, paymentId, memberSubscriptionId], map: "payment_allocations_org_payment_subscription_key")
-  @@index([organizationId, memberSubscriptionId, createdAt(sort: Desc), id], map: "payment_allocations_org_subscription_idx")
-  @@map("organization_payment_allocations")
-}
-
-/// Refunds are append-only financial commands. Cash refunds are confirmed by the authorized actor;
-/// external refunds remain pending until provider verification is implemented.
-model OrganizationPaymentRefund {
-  id                 String                          @id(map: "organization_payment_refunds_pkey") @default(uuid()) @db.Uuid
-  organizationId     String                          @map("organization_id") @db.Uuid
-  paymentId          String                          @map("payment_id") @db.Uuid
-  memberId           String                          @map("member_id") @db.Uuid
-  amountRwf          BigInt                          @map("amount_rwf")
-  status             OrganizationPaymentRefundStatus @default(PENDING)
-  reason             String                          @db.VarChar(500)
-  providerReference  String?                         @map("provider_reference") @db.VarChar(120)
-  idempotencyKey     String                          @map("idempotency_key") @db.Uuid
-  requestFingerprint String                          @map("request_fingerprint") @db.VarChar(64)
-  requestedByUserId  String                          @map("requested_by_user_id") @db.Uuid
-  confirmedAt        DateTime?                       @map("confirmed_at") @db.Timestamptz(6)
-  failedAt           DateTime?                       @map("failed_at") @db.Timestamptz(6)
-  createdAt          DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_refunds_org_fkey")
-  payment            OrganizationPayment             @relation(fields: [organizationId, paymentId, memberId], references: [organizationId, id, memberId], onDelete: Restrict, onUpdate: Restrict, map: "payment_refunds_payment_fkey")
-  requestedBy        User                            @relation("PaymentRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_refunds_requester_fkey")
-  auditEvents        OrganizationPaymentAuditEvent[]
-
-  @@unique([organizationId, id], map: "organization_payment_refunds_org_id_key")
-  @@unique([organizationId, idempotencyKey], map: "organization_payment_refunds_org_idempotency_key")
-  @@unique([organizationId, providerReference], map: "organization_payment_refunds_org_provider_ref_key")
-  @@index([organizationId, paymentId, createdAt(sort: Desc), id], map: "payment_refunds_org_payment_time_idx")
-  @@index([organizationId, status, createdAt(sort: Desc), id], map: "payment_refunds_org_status_time_idx")
-  @@map("organization_payment_refunds")
-}
-
-/// Append-only security and financial history for successful payment commands. Request IDs support
-/// correlation without storing request bodies, member contact details or provider payloads.
-model OrganizationPaymentAuditEvent {
-  id                 String                         @id(map: "organization_payment_audit_events_pkey") @default(uuid()) @db.Uuid
-  organizationId     String                         @map("organization_id") @db.Uuid
-  paymentId          String                         @map("payment_id") @db.Uuid
-  refundId           String?                        @map("refund_id") @db.Uuid
-  actorUserId        String                         @map("actor_user_id") @db.Uuid
-  action             OrganizationPaymentAuditAction
-  requestId          String                         @map("request_id") @db.VarChar(128)
-  idempotencyKey     String                         @map("idempotency_key") @db.Uuid
-  requestFingerprint String                         @map("request_fingerprint") @db.VarChar(64)
-  previousStatus     OrganizationPaymentStatus?     @map("previous_status")
-  resultingStatus    OrganizationPaymentStatus      @map("resulting_status")
-  occurredAt         DateTime                       @map("occurred_at") @db.Timestamptz(6)
-  recordedAt         DateTime                       @default(now()) @map("recorded_at") @db.Timestamptz(6)
-  organization       Organization                   @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_audit_events_org_fkey")
-  payment            OrganizationPayment            @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "payment_audit_events_payment_fkey")
-  refund             OrganizationPaymentRefund?     @relation(fields: [organizationId, refundId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "payment_audit_events_refund_fkey")
-  actor              User                           @relation("PaymentAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "payment_audit_events_actor_fkey")
-
-  @@unique([organizationId, idempotencyKey], map: "payment_audit_events_org_idempotency_key")
-  @@index([organizationId, paymentId, recordedAt(sort: Desc), id], map: "payment_audit_events_org_payment_time_idx")
-  @@index([organizationId, actorUserId, recordedAt(sort: Desc), id], map: "payment_audit_events_org_actor_time_idx")
-  @@index([requestId], map: "payment_audit_events_request_idx")
-  @@map("organization_payment_audit_events")
-}
-
 /// Global login identity. An account has no platform privileges without an active PlatformStaff
 /// record and permissions obtained through explicit role assignments.
 model User {
-  id                           String                                  @id @default(uuid()) @db.Uuid
-  email                        String                                  @unique(map: "users_email_key") @db.Citext
-  createdMemberSubscriptions   OrganizationMemberSubscription[]        @relation("MemberSubscriptionCreator")
-  cancelledMemberSubscriptions OrganizationMemberSubscription[]        @relation("MemberSubscriptionCanceller")
-  recordedOrganizationPayments OrganizationPayment[]                   @relation("PaymentRecorder")
-  voidedOrganizationPayments   OrganizationPayment[]                   @relation("PaymentVoider")
-  requestedPaymentRefunds      OrganizationPaymentRefund[]             @relation("PaymentRefundRequester")
-  paymentAuditEvents           OrganizationPaymentAuditEvent[]         @relation("PaymentAuditActor")
-  displayName                  String                                  @map("display_name") @db.VarChar(160)
-  status                       UserStatus                              @default(PENDING)
-  emailVerifiedAt              DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
-  createdAt                    DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                    DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  passwordCredential           PasswordCredential?
-  platformStaff                PlatformStaff?
-  organizationMemberships      OrganizationMembership[]
-  ownerEnrollmentChallenges    OrganizationOwnerEnrollmentChallenge[]
-  ownerAcceptanceAuditEvents   OrganizationOwnerAcceptanceAuditEvent[]
-  ownerSessions                OwnerSession[]
+  id                         String                                  @id @default(uuid()) @db.Uuid
+  email                      String                                  @unique(map: "users_email_key") @db.Citext
+  displayName                String                                  @map("display_name") @db.VarChar(160)
+  status                     UserStatus                              @default(PENDING)
+  emailVerifiedAt            DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
+  createdAt                  DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordCredential         PasswordCredential?
+  platformStaff              PlatformStaff?
+  organizationMemberships    OrganizationMembership[]
+  ownerEnrollmentChallenges  OrganizationOwnerEnrollmentChallenge[]
+  ownerAcceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
+  ownerSessions              OwnerSession[]
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -641,7 +298,7 @@ model OrganizationOwnerEnrollmentChallenge {
 }
 
 /// Recipient-actor acceptance history, separate from administrator invitation-management audits.
-/// Composite references bind the invitation, consumed proof and membership to the same gym/User.
+/// Composite references bind the invitation, consumed proof and membership to the same organization/User.
 /// Reviewed SQL stamps recordedAt; normal runtime privileges permit only SELECT and INSERT.
 model OrganizationOwnerAcceptanceAuditEvent {
   id                       String                                 @id(map: "owner_acceptance_audit_events_pkey") @default(uuid()) @db.Uuid
@@ -750,7 +407,7 @@ model PasswordCredential {
   @@map("password_credentials")
 }
 
-/// Explicit eligibility for NEXCODE platform administration. Active status alone grants nothing;
+/// Explicit eligibility for Akiba platform administration. Active status alone grants nothing;
 /// authorization also requires effective permissions assigned through PlatformRole.
 model PlatformStaff {
   id                                 String                                @id @default(uuid()) @db.Uuid
@@ -775,7 +432,7 @@ model PlatformStaff {
   @@map("platform_staff")
 }
 
-/// Server-side NEXCODE administration session. Only a digest of the high-entropy token is stored,
+/// Server-side Akiba administration session. Only a digest of the high-entropy token is stored,
 /// and the required MFA timestamp prevents this record from representing a pre-MFA login state.
 model PlatformAdminSession {
   id              String        @id @default(uuid()) @db.Uuid
