@@ -11,11 +11,11 @@ describe('database workflow environment boundaries', () => {
 		const migrations = parseEnv(await readRootFile('.env.migrations.local.example'));
 		const tests = parseEnv(await readRootFile('.env.test.local.example'));
 		const targets = [
-			[runtime.DATABASE_URL, '/gym_dev'],
-			[migrations.DIRECT_DATABASE_URL, '/gym_dev'],
-			[migrations.SHADOW_DATABASE_URL, '/gym_shadow'],
-			[migrations.TEST_MIGRATION_DATABASE_URL, '/gym_test'],
-			[tests.TEST_DATABASE_URL, '/gym_test'],
+			[runtime.DATABASE_URL, '/akiba_dev'],
+			[migrations.DIRECT_DATABASE_URL, '/akiba_dev'],
+			[migrations.SHADOW_DATABASE_URL, '/akiba_shadow'],
+			[migrations.TEST_MIGRATION_DATABASE_URL, '/akiba_test'],
+			[tests.TEST_DATABASE_URL, '/akiba_test'],
 		];
 		for (const [value, database] of targets) {
 			if (value === undefined) throw new Error('A development database target is missing.');
