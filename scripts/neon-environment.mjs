@@ -45,7 +45,8 @@ export function neonCommandErrorMessage(error) {
 }
 
 /** Read only non-secret, operator-reviewed branch endpoint identities. */
-export function readApprovedTargets() {
+/** @param {DatabaseEnvironment} [selected] */
+export function readApprovedTargets(selected) {
 	/** @type {unknown} */
 	let value;
 	try {
@@ -55,11 +56,11 @@ export function readApprovedTargets() {
 			cause: error,
 		});
 	}
-	return parseApprovedTargets(value);
+	return parseApprovedTargets(value, selected);
 }
 
-/** @param {unknown} value @returns {ApprovedTargets} */
-export function parseApprovedTargets(value) {
+/** @param {unknown} value @param {DatabaseEnvironment} [selected] @returns {ApprovedTargets} */
+export function parseApprovedTargets(value, selected) {
 	if (typeof value !== 'object' || value === null || Object.keys(value).length !== 2) {
 		throw new NeonEnvironmentError(
 			'Approve exactly development and production targets in neon.environments.json.',
@@ -76,12 +77,21 @@ export function parseApprovedTargets(value) {
 				: 'production' in value
 					? value.production
 					: undefined;
+		// An unapproved production endpoint cannot direct a development connection.
+		// Retain the registry shape; production selection still requires its own approved host.
+		const pendingProduction =
+			selected === 'development' &&
+			name === 'production' &&
+			typeof entry === 'object' &&
+			entry !== null &&
+			'directHost' in entry &&
+			entry.directHost === '';
 		if (
 			typeof entry !== 'object' ||
 			entry === null ||
 			!('directHost' in entry) ||
 			typeof entry.directHost !== 'string' ||
-			!/^ep-[a-z0-9-]+\.[a-z0-9.-]+\.neon\.tech$/u.test(entry.directHost) ||
+			(!pendingProduction && !/^ep-[a-z0-9-]+\.[a-z0-9.-]+\.neon\.tech$/u.test(entry.directHost)) ||
 			entry.directHost.includes('-pooler.') ||
 			!('database' in entry) ||
 			typeof entry.database !== 'string' ||
@@ -167,7 +177,7 @@ function parseConnection(value, name) {
 export function validateNeonEnvironment(selected, environment, targets) {
 	if (environment.NODE_ENV !== selected)
 		throw new NeonEnvironmentError(`NODE_ENV must be ${selected} for this command.`);
-	const approved = parseApprovedTargets(targets)[selected];
+	const approved = parseApprovedTargets(targets, selected)[selected];
 	const pooled = parseConnection(environment.DATABASE_URL, 'DATABASE_URL');
 	const direct = parseConnection(environment.DIRECT_DATABASE_URL, 'DIRECT_DATABASE_URL');
 	const pooledHost = approved.directHost.replace('.', '-pooler.');
@@ -209,7 +219,7 @@ export function loadNeonEnvironment(
 	selected,
 	environment = process.env,
 	root = repositoryRoot,
-	targets = readApprovedTargets(),
+	targets = readApprovedTargets(selected),
 ) {
 	if (environment.NODE_ENV !== undefined && environment.NODE_ENV !== selected) {
 		throw new NeonEnvironmentError(`Refusing ${selected} command under a different NODE_ENV.`);
