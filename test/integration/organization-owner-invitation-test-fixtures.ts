@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { PrismaService } from '../../src/database/prisma.service.js';
 import {
-	assertTestDatabaseWasVerified,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	assertDevelopmentDatabaseWasVerified,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
 const TRANSACTION_OPTIONS = { maxWait: 30_000, timeout: 60_000 } as const;
 
@@ -13,22 +13,25 @@ export class OrganizationOwnerInvitationTestFixtures {
 	readonly #invitationIds = new Set<string>();
 	readonly #auditEventIds = new Set<string>();
 
-	reserveInvitationId(verifiedDatabase: VerifiedTestDatabase): string {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	reserveInvitationId(verifiedDatabase: VerifiedDevelopmentDatabase): string {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 		const id = randomUUID();
 		this.#invitationIds.add(id);
 		return id;
 	}
 
-	reserveAuditEventId(verifiedDatabase: VerifiedTestDatabase): string {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	reserveAuditEventId(verifiedDatabase: VerifiedDevelopmentDatabase): string {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 		const id = randomUUID();
 		this.#auditEventIds.add(id);
 		return id;
 	}
 
-	async cleanup(prisma: PrismaService, verifiedDatabase: VerifiedTestDatabase): Promise<void> {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	async cleanup(
+		prisma: PrismaService,
+		verifiedDatabase: VerifiedDevelopmentDatabase,
+	): Promise<void> {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 		const invitationIds = [...this.#invitationIds];
 		const auditEventIds = [...this.#auditEventIds];
 		if (invitationIds.length === 0 && auditEventIds.length === 0) return;
