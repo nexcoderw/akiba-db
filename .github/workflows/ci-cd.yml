@@ -19,10 +19,6 @@ jobs:
     name: Verify database package
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      # CLI configuration only; these checks never connect to a database.
-      DATABASE_URL: postgresql://localhost:5432/akiba_ci
-      NODE_ENV: production
     steps:
       - name: Check out source
         uses: actions/checkout@v4
