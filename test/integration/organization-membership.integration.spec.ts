@@ -116,7 +116,7 @@ describe('organization ownership and membership foundation', () => {
 		return verified;
 	}
 
-	async function createOrganization(name = 'Soho Gym'): Promise<string> {
+	async function createOrganization(name = 'Kimihurura Supplies'): Promise<string> {
 		const fixture = organizations.reserve(requireVerified());
 		await prisma.organization.create({ data: { ...fixture, name } });
 		return fixture.id;
@@ -159,7 +159,7 @@ describe('organization ownership and membership foundation', () => {
 				id,
 				organizationId,
 				key,
-				name: key === 'owner' ? 'Owner' : 'Trainer',
+				name: key === 'owner' ? 'Owner' : 'Operator',
 				description: key === 'owner' ? 'Organization ownership authority' : null,
 				isSystem,
 			},
@@ -190,16 +190,18 @@ describe('organization ownership and membership foundation', () => {
 	});
 
 	it('supports one user in multiple organizations and multiple users in one organization', async () => {
-		const soho = await createOrganization('Soho Gym');
-		const power = await createOrganization('Power Gym');
+		const kimihurura = await createOrganization('Kimihurura Supplies');
+		const power = await createOrganization('Remera Trading');
 		const aline = await createUser();
 		const uwase = await createUser();
-		await createMembership(soho, aline);
+		await createMembership(kimihurura, aline);
 		await createMembership(power, aline);
-		await createMembership(soho, uwase);
+		await createMembership(kimihurura, uwase);
 
 		expect(await prisma.organizationMembership.count({ where: { userId: aline } })).toBe(2);
-		expect(await prisma.organizationMembership.count({ where: { organizationId: soho } })).toBe(2);
+		expect(
+			await prisma.organizationMembership.count({ where: { organizationId: kimihurura } }),
+		).toBe(2);
 	});
 
 	it('rejects duplicate memberships and retains uniqueness after revocation', async () => {
@@ -294,9 +296,9 @@ describe('organization ownership and membership foundation', () => {
 	});
 
 	it('keeps owner roles organization-specific and unique within one organization', async () => {
-		const soho = await createOrganization('Soho Gym');
-		const power = await createOrganization('Power Gym');
-		await createRole(soho);
+		const kimihurura = await createOrganization('Kimihurura Supplies');
+		const power = await createOrganization('Remera Trading');
+		await createRole(kimihurura);
 		await createRole(power);
 		const duplicateId = authorization.reserveRoleId(requireVerified());
 
@@ -304,7 +306,7 @@ describe('organization ownership and membership foundation', () => {
 			prisma.organizationRole.create({
 				data: {
 					id: duplicateId,
-					organizationId: soho,
+					organizationId: kimihurura,
 					key: 'owner',
 					name: 'Owner',
 					isSystem: true,
@@ -342,7 +344,7 @@ describe('organization ownership and membership foundation', () => {
 		await expect(prisma.$executeRaw`
 			INSERT INTO public.organization_roles
 				(id, organization_id, key, name, is_system, updated_at)
-			VALUES (${blankNameId}::uuid, ${organizationId}::uuid, 'trainer', ' ', false, now())
+			VALUES (${blankNameId}::uuid, ${organizationId}::uuid, 'operator', ' ', false, now())
 		`).rejects.toThrow('organization_roles_name_nonblank_check');
 
 		const blankDescriptionId = authorization.reserveRoleId(requireVerified());
@@ -361,7 +363,7 @@ describe('organization ownership and membership foundation', () => {
 				data: {
 					id: longNameId,
 					organizationId,
-					key: 'trainer',
+					key: 'operator',
 					name: 'x'.repeat(121),
 				},
 			}),
@@ -405,16 +407,16 @@ describe('organization ownership and membership foundation', () => {
 	});
 
 	it('rejects cross-organization and nonexistent membership-role assignments', async () => {
-		const soho = await createOrganization('Soho Gym');
-		const power = await createOrganization('Power Gym');
-		const sohoMembership = await createMembership(soho, await createUser());
+		const kimihurura = await createOrganization('Kimihurura Supplies');
+		const power = await createOrganization('Remera Trading');
+		const kimihururaMembership = await createMembership(kimihurura, await createUser());
 		const powerOwner = await createRole(power);
 
 		await expect(
 			prisma.organizationMembershipRole.create({
 				data: {
-					organizationId: soho,
-					organizationMembershipId: sohoMembership,
+					organizationId: kimihurura,
+					organizationMembershipId: kimihururaMembership,
 					organizationRoleId: powerOwner,
 				},
 			}),
@@ -422,8 +424,8 @@ describe('organization ownership and membership foundation', () => {
 		await expect(
 			prisma.organizationMembershipRole.create({
 				data: {
-					organizationId: soho,
-					organizationMembershipId: sohoMembership,
+					organizationId: kimihurura,
+					organizationMembershipId: kimihururaMembership,
 					organizationRoleId: randomUUID(),
 				},
 			}),
@@ -431,9 +433,9 @@ describe('organization ownership and membership foundation', () => {
 		await expect(
 			prisma.organizationMembershipRole.create({
 				data: {
-					organizationId: soho,
+					organizationId: kimihurura,
 					organizationMembershipId: randomUUID(),
-					organizationRoleId: await createRole(soho, 'trainer'),
+					organizationRoleId: await createRole(kimihurura, 'operator'),
 				},
 			}),
 		).rejects.toMatchObject({ code: 'P2003' });
@@ -477,7 +479,7 @@ describe('organization ownership and membership foundation', () => {
 		expect(privileges).toEqual([{ exposed: false }]);
 	});
 
-	it('keeps platform authorization separate from gym ownership', async () => {
+	it('keeps platform authorization separate from organization ownership', async () => {
 		const organizationId = await createOrganization();
 		const userId = await createUser();
 		const membershipId = await createMembership(
