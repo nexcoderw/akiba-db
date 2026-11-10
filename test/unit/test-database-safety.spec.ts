@@ -17,32 +17,32 @@ const UNSAFE_ENVIRONMENT_CASES: readonly {
 }[] = [
 	{
 		name: 'an invalid protocol',
-		override: { TEST_DATABASE_URL: 'mysql://gym_test@tests.example.test/nexcode_gym_test' },
+		override: { TEST_DATABASE_URL: 'mysql://akiba_test@tests.example.test/akiba_test' },
 		message: 'must use the postgresql: or postgres: protocol',
 	},
 	{
 		name: 'an administrative database',
-		override: { TEST_DATABASE_URL: 'postgresql://gym_test@tests.example.test/postgres' },
+		override: { TEST_DATABASE_URL: 'postgresql://akiba_test@tests.example.test/postgres' },
 		message: 'must not target a PostgreSQL administrative database',
 	},
 	{
 		name: 'a production-labelled database',
 		override: {
-			TEST_DATABASE_URL: 'postgresql://gym_test@tests.example.test/nexcode_gym_production',
+			TEST_DATABASE_URL: 'postgresql://akiba_test@tests.example.test/akiba_production',
 		},
 		message: 'appears to target a production configuration',
 	},
 	{
 		name: 'the runtime target through a pooler alias',
 		override: {
-			TEST_DATABASE_URL: 'postgresql://gym_test@runtime-pooler.example.test:5432/nexcode_gym',
+			TEST_DATABASE_URL: 'postgresql://akiba_test@runtime-pooler.example.test:5432/akiba',
 		},
 		message: 'must not target the same database as DATABASE_URL',
 	},
 	{
 		name: 'a shared runtime user',
 		override: {
-			TEST_DATABASE_URL: 'postgresql://gym_app@tests.example.test/nexcode_gym_test',
+			TEST_DATABASE_URL: 'postgresql://akiba_app@tests.example.test/akiba_test',
 		},
 		message: 'must use a database user distinct from DATABASE_URL',
 	},
@@ -50,11 +50,11 @@ const UNSAFE_ENVIRONMENT_CASES: readonly {
 
 function safeEnvironment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 	return {
-		TEST_DATABASE_URL: 'postgresql://gym_test@tests.example.test:5432/nexcode_gym_test',
+		TEST_DATABASE_URL: 'postgresql://akiba_test@tests.example.test:5432/akiba_test',
 		TEST_DATABASE_MARKER: TEST_MARKER,
-		DATABASE_URL: 'postgresql://gym_app@runtime.example.test:5432/nexcode_gym',
-		DIRECT_DATABASE_URL: 'postgresql://gym_migrator@runtime.example.test:5432/nexcode_gym',
-		SHADOW_DATABASE_URL: 'postgresql://gym_shadow@shadow.example.test:5432/nexcode_gym_shadow',
+		DATABASE_URL: 'postgresql://akiba_app@runtime.example.test:5432/akiba',
+		DIRECT_DATABASE_URL: 'postgresql://akiba_migrator@runtime.example.test:5432/akiba',
+		SHADOW_DATABASE_URL: 'postgresql://akiba_shadow@shadow.example.test:5432/akiba_shadow',
 		...overrides,
 	};
 }
@@ -63,9 +63,9 @@ function safeIdentity(
 	overrides: Partial<ConnectedTestDatabaseIdentity> = {},
 ): ConnectedTestDatabaseIdentity {
 	return {
-		databaseName: 'nexcode_gym_test',
-		databaseUser: 'gym_test',
-		databaseMarker: `nexcode-gym:disposable-integration-test:${TEST_MARKER}`,
+		databaseName: 'akiba_test',
+		databaseUser: 'akiba_test',
+		databaseMarker: `akiba:disposable-integration-test:${TEST_MARKER}`,
 		isSuperuser: false,
 		canCreateDatabase: false,
 		canCreateRole: false,
@@ -99,8 +99,8 @@ describe('integration-test database safety', () => {
 	it('accepts an isolated target with a dedicated user and valid marker configuration', () => {
 		expect(loadTestDatabaseSafetyConfig(safeEnvironment())).toEqual({
 			databaseUrl: safeEnvironment().TEST_DATABASE_URL,
-			databaseName: 'nexcode_gym_test',
-			databaseUser: 'gym_test',
+			databaseName: 'akiba_test',
+			databaseUser: 'akiba_test',
 			marker: TEST_MARKER,
 		});
 	});
