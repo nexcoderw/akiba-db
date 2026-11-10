@@ -12,6 +12,43 @@ import {
 import { approvedTargets, neonEnvironment } from './neon-environment-fixtures.js';
 
 describe('Neon branch selection', () => {
+	it('permits approved development commands while production approval is pending', () => {
+		const pending = {
+			development: approvedTargets.development,
+			production: { ...approvedTargets.production, directHost: '' },
+		};
+		expect(parseApprovedTargets(pending, 'development').development).toEqual(
+			approvedTargets.development,
+		);
+		expect(
+			validateNeonEnvironment('development', neonEnvironment('development'), pending),
+		).toMatchObject({ selected: 'development' });
+		expect(() => parseApprovedTargets(pending)).toThrow('Approve the production');
+		expect(() =>
+			validateNeonEnvironment('production', neonEnvironment('production'), pending),
+		).toThrow('Approve the production');
+		expect(() =>
+			validateNeonEnvironment('development', neonEnvironment('production'), pending),
+		).toThrow('NODE_ENV must be development');
+		expect(() =>
+			parseApprovedTargets(
+				{ development: approvedTargets.development, production: approvedTargets.development },
+				'development',
+			),
+		).toThrow('distinct');
+		const root = mkdtempSync(join(tmpdir(), 'akiba-pending-production-'));
+		try {
+			const development = neonEnvironment('development');
+			writeFileSync(
+				join(root, '.env.local'),
+				`NODE_ENV=development\nDATABASE_URL="${development.DATABASE_URL ?? ''}"\nDIRECT_DATABASE_URL="${development.DIRECT_DATABASE_URL ?? ''}"\n`,
+			);
+			expect(loadNeonEnvironment('development', {}, root, pending).selected).toBe('development');
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it('reports the unapproved branch through safe command diagnostics', () => {
 		try {
 			parseApprovedTargets({
