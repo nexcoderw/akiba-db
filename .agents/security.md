@@ -18,7 +18,7 @@ dynamic identifier interpolation, public database exposure, or production data i
 
 ## Correct example
 
-`gym_app` receives DML on approved schemas but cannot create or alter tables; `gym_migrator` is used
+`akiba_app` receives DML on approved schemas but cannot create or alter tables; `akiba_migrator` is used
 only during an approved migration window.
 
 ## Common mistakes
