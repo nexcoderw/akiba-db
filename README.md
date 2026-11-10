@@ -7,11 +7,12 @@ package version and import its root API; they do not copy schemas or run migrati
 
 ## Current foundation and scope
 
-The schema retains 23 foundation models and 14 enums: global users and password credentials;
+The schema retains 25 foundation models and 14 enums: global users and password credentials;
 platform staff, roles and permissions; platform sessions, encrypted TOTP, recovery codes and MFA
 challenges; organizations with unique slugs/lifecycle; organization access memberships, roles and
 assignments; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
-and organization/platform/ownership audits. SQL preserves restrictive relations, tenant-composite
+global mailbox proofs and identity security audits; and organization/platform/ownership audits.
+SQL preserves restrictive relations, tenant-composite
 foreign keys, scoped indexes, integrity checks, audit timestamps and onboarding guards.
 
 `DatabaseModule`, `PrismaService`, `loadDatabaseConfig` and `TenantTransactionService` remain public.
@@ -304,3 +305,48 @@ Concurrent independent calls remain supported. These changes do not add RLS or a
 API membership and explicit query predicates remain mandatory. Existing live rollback/pool and
 composite-relationship suites are retained under the guarded development runner. After human checks
 and committing these fixes, update the API CI database revision before releasing either package.
+
+## Identity and credential expansion
+
+The forward identity_credential_foundation migration adds a terminal DISABLED global account state,
+User.identityVersion, and credential version/normalization/disabledAt metadata. Existing passwords are
+neither rehashed nor reset: normalization defaults to raw to preserve their original verification bytes.
+New API-owned writes explicitly use NFC. User and PasswordCredential remain global, with a restrictive
+one-to-one relationship; organization membership and platform privileges remain separate assignments.
+
+User.email retains indexed CITEXT uniqueness. API email handling canonicalizes ASCII local parts and
+IDNA domains; the SQL check rejects unsupported stored syntax and overlong identities. Historical
+mixed-case ASCII addresses remain compatible with case-insensitive lookup. Review existing data
+before deployment: validation intentionally refuses unsupported rows rather than silently changing them.
+The migration supplies no data cleanup or credential conversion. Legacy credential contents and live
+compatibility remain unverified until the operator completes development checks.
+
+UserEmailVerificationChallenge contains only a digest, target address, identity version and bounded
+lifetime/consumption state. The API owns proof generation, authorized issuance and atomic consumption.
+The email-change trigger clears old verification and advances identity version even for direct SQL
+writes. The authorized verified-change workflow writes its new proof timestamp in a subsequent
+statement inside the same transaction; an email write alone never retains its old mailbox proof.
+
+IdentitySecurityAuditEvent stores actual identity/credential actions, actor references, versions and
+request correlation without credential or mailbox contents. Constraints reject absent/mismatched
+actors. Update/delete triggers protect ordinary audit writes; privileged owners still have DDL powers,
+so this is not a least-privilege or tamper-proof database role guarantee. New integration tests force
+audit operations to roll back and never disable these controls for cleanup.
+
+Password-change, suspension and compromise workflows update versions and revoke dependent sessions
+and proofs atomically in the API. Live authentication reads reject disabled credentials and inactive or
+unverified global accounts. No new login, email delivery, MFA-reset or password-reset endpoint is added.
+Argon2id, NFC, password blocklists and frontend-safe errors belong to the API, not this library.
+
+Human review order: verify current development migration status, capture/review the datasource/schema
+diff, compare it with the authored SQL and its integrity guards, then commit and deploy the reviewed
+forward migration. Use npm run migration:status, npm run migration:diff and npm run migration:check
+as documented above. The enum expansion is outside the following DDL transaction; if later validation
+fails, retain that harmless enum addition and resolve the failed migration through reviewed forward
+recovery. Never reset a database or remove existing identities to make validation pass.
+
+Generate Prisma Client and build this package before the API. Set the API repository variable
+AKIBA_DB_SOURCE_REVISION to the reviewed DB commit; CI requires a full immutable hash rather than
+silently selecting an old schema or main. No dependency version, generated client or lockfile is
+hand-authored. Live migrations, owner privilege diagnostics, RLS and integration tests were not run by
+the agent. Database-enforced tenant isolation remains BLOCKED under the current no-RLS owner policy.
