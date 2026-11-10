@@ -206,7 +206,7 @@ describe('platform administrator database foundation', () => {
 				id: fixtures.reservePlatformRoleId(),
 				key,
 				name: 'Platform Support',
-				description: 'Supports fictional NEXCODE platform operations.',
+				description: 'Supports fictional Akiba platform operations.',
 			},
 		});
 
@@ -265,7 +265,7 @@ describe('platform administrator database foundation', () => {
 				id: fixtures.reservePlatformRoleId(),
 				key: fixtureKey('platform.administrator'),
 				name: 'Platform Administrator',
-				description: 'Administers approved NEXCODE platform capabilities.',
+				description: 'Administers approved Akiba platform capabilities.',
 			},
 		});
 		const assignment = { platformStaffId: staff.id, platformRoleId: role.id };
@@ -335,7 +335,7 @@ describe('platform administrator database foundation', () => {
 				id: fixtures.reservePlatformRoleId(),
 				key: fixtureKey('platform.owner'),
 				name: 'Platform Owner',
-				description: 'Reserved for explicitly bootstrapped NEXCODE ownership.',
+				description: 'Reserved for explicitly bootstrapped Akiba ownership.',
 				isSystem: true,
 			},
 		});
