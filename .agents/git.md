@@ -1,6 +1,6 @@
 # Git Workflow
 
-**Purpose:** Keep NEXCODE Gym DB history clean, reviewable, and free of secrets, with the developer in full control of every Git write.
+**Purpose:** Keep Akiba Database history clean, reviewable, and free of secrets, with the developer in full control of every Git write.
 **Applies to:** The end of every task, and anything that decides what may be committed.
 **Related:** [agent-workflow.md](agent-workflow.md), [security.md](security.md), [package-management.md](package-management.md)
 **Last reviewed:** 2026-10-12
@@ -54,7 +54,7 @@ Examples: `feat(db): add tenant transaction context`, `fix(config): load local p
 
 Notes:
 
-- `.gitignore` ignores `.env*` but allows only `.env.local.example` and `.env.production.example`. These templates never contain credentials or environment-specific secret values.
+- `.gitignore` ignores `.env*` but allows `.env.local.example`, `.env.production.example`, `.env.migrations.local.example`, and `.env.test.local.example`. These templates never contain credentials or environment-specific secret values.
 - `package-lock.json` changes only through the developer's npm commands and is committed right after the matching `package.json` commit.
 - The `.agents/skills/`, `.claude/skills/`, and `.windsurf/skills/` directories and `skills-lock.json` are agent tooling; committing them is the developer's choice.
 
