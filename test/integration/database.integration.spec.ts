@@ -120,7 +120,6 @@ describe('database integration', () => {
 				AND table_name <> '_prisma_migrations'
 			ORDER BY table_name
 		`;
-		expect(expectedTables).toHaveLength(23);
 		expect(tables.map(({ table_name }) => table_name)).toEqual(expectedTables.sort());
 	});
 
