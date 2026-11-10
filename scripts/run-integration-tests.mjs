@@ -49,7 +49,9 @@ try {
 			.then((held) => {
 				if (!held) coordinatorLost();
 			})
-			.catch(() => coordinatorLost())
+			.catch(() => {
+				coordinatorLost();
+			})
 			.finally(() => {
 				state.heartbeatInFlight = false;
 			});
