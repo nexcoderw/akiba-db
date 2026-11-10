@@ -8,13 +8,13 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { UserStatus } from '../../src/index.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
 	verifyTestTablePrivileges,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const requiredChecks = [
 	'owner_sessions_token_digest_check',
 	'owner_sessions_assurance_check',
@@ -26,7 +26,7 @@ jest.setTimeout(60_000);
 describe('owner session persistence', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let identities: PlatformAdminTestFixtures;
 	const sessionIds = new Set<string>();
 
@@ -42,7 +42,7 @@ describe('owner session persistence', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const [table, checks, triggers] = await Promise.all([
 			prisma.$queryRaw<{ relation: string | null }[]>`
 				SELECT to_regclass('public.owner_sessions')::text AS relation
@@ -70,7 +70,7 @@ describe('owner session persistence', () => {
 		) {
 			throw new Error(
 				'Owner session prerequisites are missing. Apply the reviewed add_owner_sessions ' +
-					'migration to the independently verified disposable database before this suite.',
+					'migration to the approved development branch before this suite.',
 			);
 		}
 		await verifyTestTablePrivileges(prisma, [
