@@ -102,7 +102,7 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 		await expect(
 			prisma.passwordCredential.update({
 				where: { id: credential.id },
-				data: { normalization: 'unexpected' },
+				data: { normalization: 'invalid' },
 			}),
 		).rejects.toThrow(/password_credentials_normalization_check/u);
 		await expect(
