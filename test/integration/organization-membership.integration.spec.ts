@@ -52,7 +52,9 @@ describe('organization ownership and membership foundation', () => {
 				SELECT unnest(ARRAY[
 					to_regclass('public.organization_memberships')::text,
 					to_regclass('public.organization_roles')::text,
-					to_regclass('public.organization_membership_roles')::text
+					to_regclass('public.organization_membership_roles')::text,
+					to_regclass('public.organization_permissions')::text,
+					to_regclass('public.organization_role_permissions')::text
 				]) AS name
 			`,
 			prisma.$queryRaw<{ name: string }[]>`
@@ -462,6 +464,110 @@ describe('organization ownership and membership foundation', () => {
 		});
 	});
 
+	it('enforces case-insensitive role names and rejects owner impersonation', async () => {
+		const organizationId = await createOrganization();
+		await createRole(organizationId, 'custom.operator', false);
+		await expect(
+			prisma.organizationRole.create({
+				data: {
+					id: authorization.reserveRoleId(requireVerified()),
+					organizationId,
+					key: 'custom.second',
+					name: 'operator',
+					isSystem: false,
+				},
+			}),
+		).rejects.toMatchObject({ code: 'P2002' });
+		await expect(
+			prisma.organizationRole.create({
+				data: {
+					id: authorization.reserveRoleId(requireVerified()),
+					organizationId,
+					key: 'custom.owner',
+					name: 'Organization Owner',
+					isSystem: false,
+				},
+			}),
+		).rejects.toThrow('organization_roles_system_identity_check');
+	});
+
+	it('rejects a cross-organization permission mapping at the database boundary', async () => {
+		const first = await createOrganization('Kimihurura Supplies');
+		const second = await createOrganization('Remera Trading');
+		const roleId = await createRole(first, 'custom.reader', false);
+		const permission = await prisma.organizationPermission.findUniqueOrThrow({
+			where: { key: 'organization.members.read' },
+		});
+		await expect(
+			prisma.organizationRolePermission.create({
+				data: {
+					organizationId: second,
+					organizationRoleId: roleId,
+					organizationPermissionId: permission.id,
+				},
+			}),
+		).rejects.toMatchObject({ code: 'P2003' });
+		try {
+			await prisma.organizationRolePermission.create({
+				data: {
+					organizationId: first,
+					organizationRoleId: roleId,
+					organizationPermissionId: permission.id,
+				},
+			});
+			await expect(
+				prisma.organizationRolePermission.create({
+					data: {
+						organizationId: first,
+						organizationRoleId: roleId,
+						organizationPermissionId: permission.id,
+					},
+				}),
+			).rejects.toMatchObject({ code: 'P2002' });
+		} finally {
+			await prisma.organizationRolePermission.deleteMany({
+				where: {
+					organizationId: first,
+					organizationRoleId: roleId,
+				},
+			});
+		}
+	});
+
+	it('keeps authorization audits immutable and rolls back a failed mutation', async () => {
+		const organizationId = await createOrganization();
+		const actorMembershipId = await createMembership(organizationId, await createUser());
+		const actor = await prisma.organizationMembership.findUniqueOrThrow({
+			where: { id: actorMembershipId },
+		});
+		const targetRoleId = await createRole(organizationId, 'custom.reader', false);
+		const auditId = randomUUID();
+		await expect(
+			prisma.$transaction(async (transaction) => {
+				await transaction.organizationAuthorizationAuditEvent.create({
+					data: {
+						id: auditId,
+						organizationId,
+						actorMembershipId,
+						actorUserId: actor.userId,
+						targetRoleId,
+						action: 'role_created',
+						requestId: `req_${randomUUID()}`,
+					},
+				});
+				await transaction.organizationAuthorizationAuditEvent.updateMany({
+					where: { id: auditId },
+					data: { action: 'role_disabled' },
+				});
+			}),
+		).rejects.toThrow();
+		expect(
+			await prisma.organizationAuthorizationAuditEvent.count({
+				where: { id: auditId },
+			}),
+		).toBe(0);
+	});
+
 	it('exposes no tenant authorization tables through PUBLIC privileges', async () => {
 		const privileges = await prisma.$queryRaw<{ exposed: boolean }[]>`
 			SELECT EXISTS (
@@ -472,7 +578,10 @@ describe('organization ownership and membership foundation', () => {
 				WHERE relation.oid IN (
 					'public.organization_memberships'::regclass,
 					'public.organization_roles'::regclass,
-					'public.organization_membership_roles'::regclass
+					'public.organization_membership_roles'::regclass,
+					'public.organization_permissions'::regclass,
+					'public.organization_role_permissions'::regclass,
+					'public.organization_authorization_audit_events'::regclass
 				) AND grant_entry.grantee = 0
 			) AS exposed
 		`;
