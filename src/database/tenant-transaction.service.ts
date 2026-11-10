@@ -41,15 +41,17 @@ export class TenantTransactionService {
 		this.assertUuid(organizationId, 'organizationId');
 		if (branchId !== undefined) this.assertUuid(branchId, 'branchId');
 		const budget = options === undefined ? undefined : { ...options };
-		return this.execution.run(true, () => this.prisma.$transaction(async (transaction) => {
-			await transaction.$queryRaw`
+		return this.execution.run(true, () =>
+			this.prisma.$transaction(async (transaction) => {
+				await transaction.$queryRaw`
 				SELECT set_config('app.current_organization_id', ${organizationId}, true)
 			`;
-			await transaction.$queryRaw`
+				await transaction.$queryRaw`
 				SELECT set_config('app.current_branch_id', ${branchId ?? ''}, true)
 			`;
-			return operation(transaction);
-		}, budget));
+				return operation(transaction);
+			}, budget),
+		);
 	}
 
 	private assertUuid(value: string, field: keyof TenantContext): void {
