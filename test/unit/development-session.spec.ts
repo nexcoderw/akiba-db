@@ -4,7 +4,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { jest } from '@jest/globals';
 import type { Client } from 'pg';
 
-import { verifyDevelopmentSession } from '../../scripts/development-session.mjs';
+import {
+	verifyDevelopmentCoordinatorLease,
+	verifyDevelopmentSession,
+} from '../../scripts/development-session.mjs';
 import { repositoryRoot } from '../../scripts/neon-environment.mjs';
 
 type Query = (sql: string, values?: readonly unknown[]) => Promise<{ rows: unknown[] }>;
@@ -56,5 +59,17 @@ describe('exclusive development integration preflight', () => {
 	])('refuses unsafe preconditions: $message', async ({ override, message }) => {
 		const { client } = clientWithPreflight(override);
 		await expect(verifyDevelopmentSession(client, config, repositoryRoot)).rejects.toThrow(message);
+	});
+
+	it('keeps only the original lease-owning coordinator eligible', async () => {
+		const query = jest.fn<Query>();
+		const client = { query } as unknown as Client;
+		query.mockResolvedValueOnce({ rows: [{ pid: 12345, held: true }] });
+		await expect(verifyDevelopmentCoordinatorLease(client, 12345)).resolves.toBe(true);
+		query.mockResolvedValueOnce({ rows: [{ pid: 12346, held: true }] });
+		await expect(verifyDevelopmentCoordinatorLease(client, 12345)).resolves.toBe(false);
+		query.mockResolvedValueOnce({ rows: [{ pid: 12345, held: false }] });
+		await expect(verifyDevelopmentCoordinatorLease(client, 12345)).resolves.toBe(false);
+		expect(query.mock.calls.every(([, values]) => values?.length === 2)).toBe(true);
 	});
 });
