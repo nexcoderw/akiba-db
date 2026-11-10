@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-Protect the sole, ordered history of NEXCODE Gym database structures.
+Protect the sole, ordered history of Akiba database structures.
 
 ## Mandatory engineering requirements
 
@@ -14,7 +14,7 @@ compatibility. Prefer forward fixes after deployment.
 ## Forbidden patterns
 
 No production `prisma db push`, automatic startup migrations, editing applied SQL, destructive SQL
-without explicit human approval, or migrations maintained by `gym-api`.
+without explicit human approval, or migrations maintained by `akiba-api`.
 
 ## Correct example
 
