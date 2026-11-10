@@ -78,8 +78,10 @@ Only two templates are tracked:
 Each contains `NODE_ENV`, `DATABASE_URL` and `DIRECT_DATABASE_URL`. The pooled URL serves runtime
 queries; the direct URL serves administrative commands. They must use the **same database and managed
 owner/password on the same branch**, not independent resources. Copy exact Neon connection strings;
-placeholders do not provision anything. TLS is required. Optional Neon `channel_binding=require` is
-accepted. Routing overrides and duplicate/unsupported URL options are rejected by repository tools.
+placeholders do not provision anything. TLS is required. New templates use `sslmode=verify-full` to
+request certificate and hostname verification explicitly; existing `sslmode=require` URLs remain
+accepted. Optional Neon `channel_binding=require` is accepted. Routing overrides and
+duplicate/unsupported URL options are rejected by repository tools.
 Runtime also supports `DATABASE_POOL_MAX` (default 10 per process) and
 `DATABASE_CONNECTION_TIMEOUT_MS` (default 10000); both must be positive integers.
 
@@ -212,7 +214,8 @@ npm run test:integration
 The runner refuses production and unexpected arguments, validates the approved pooled/direct pair,
 opens a direct coordinator session, checks actual database/user, acquires a session advisory lease,
 refuses other existing client sessions and verifies every local migration's completed checksum. It
-then launches Jest serially. Every suite verifies the live coordinator/lease through its actual Prisma
+then launches Jest serially and periodically verifies that the original coordinator session still owns
+its lease. A lost lease stops the child run. Every suite verifies the live coordinator/lease through its actual Prisma
 connection before fixture writes or cleanup. Direct Jest invocation lacks this coordinator and fails.
 A second cooperating runner cannot start. Coordinator connection loss terminates the child runner.
 The coordinator PID is transient process coordination, not persistent database data or a new configured
