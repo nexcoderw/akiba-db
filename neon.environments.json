@@ -1,0 +1,12 @@
+{
+  "development": {
+    "directHost": "",
+    "database": "neondb",
+    "user": "neondb_owner"
+  },
+  "production": {
+    "directHost": "",
+    "database": "neondb",
+    "user": "neondb_owner"
+  }
+}
