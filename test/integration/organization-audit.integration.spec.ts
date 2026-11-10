@@ -134,7 +134,7 @@ describe('durable organization and authorization audit', () => {
 
 	async function organization(): Promise<string> {
 		const fixture = organizations.reserve(requireVerified());
-		await prisma.organization.create({ data: { ...fixture, name: 'Soho Gym' } });
+		await prisma.organization.create({ data: { ...fixture, name: 'Kimihurura Supplies' } });
 		return fixture.id;
 	}
 
@@ -150,7 +150,7 @@ describe('durable organization and authorization audit', () => {
 			resultingStatus: OrganizationStatus.PENDING,
 			changedFields: ['name', 'slug', 'status'],
 			previousName: null,
-			resultingName: 'Soho Gym',
+			resultingName: 'Kimihurura Supplies',
 			occurredAt: new Date(),
 		};
 	}
@@ -232,8 +232,8 @@ describe('durable organization and authorization audit', () => {
 			previousStatus: OrganizationStatus.PENDING,
 			resultingStatus: OrganizationStatus.PENDING,
 			changedFields: ['name'],
-			previousName: 'Soho Gym',
-			resultingName: 'Power Gym',
+			previousName: 'Kimihurura Supplies',
+			resultingName: 'Remera Trading',
 		},
 		{
 			action: OrganizationAuditAction.ACTIVATE,
@@ -277,7 +277,7 @@ describe('durable organization and authorization audit', () => {
 			{
 				action: OrganizationAuditAction.UPDATE,
 				changedFields: ['name'],
-				previousName: 'Soho Gym',
+				previousName: 'Kimihurura Supplies',
 			},
 		]) {
 			await expect(
@@ -295,7 +295,7 @@ describe('durable organization and authorization audit', () => {
 				 changed_fields, resulting_name, occurred_at)
 				VALUES (${data.id}::uuid, ${data.organizationId}::uuid,
 				 ${data.actorPlatformStaffId}::uuid, NULL, ${action}::public.organization_audit_action,
-				 'pending', ARRAY['name', 'slug', 'status'], 'Soho Gym', now())
+				 'pending', ARRAY['name', 'slug', 'status'], 'Kimihurura Supplies', now())
 			`).rejects.toThrow();
 		}
 	});
@@ -308,15 +308,15 @@ describe('durable organization and authorization audit', () => {
 			action: OrganizationAuditAction.UPDATE,
 			previousStatus: OrganizationStatus.PENDING,
 			changedFields: ['name'],
-			previousName: 'Soho Gym',
-			resultingName: 'Power Gym',
+			previousName: 'Kimihurura Supplies',
+			resultingName: 'Remera Trading',
 		};
 		await prisma.$transaction(async (transaction) => {
-			await transaction.organization.update({ where: { id }, data: { name: 'Power Gym' } });
+			await transaction.organization.update({ where: { id }, data: { name: 'Remera Trading' } });
 			await transaction.organizationAuditEvent.create({ data });
 		}, options);
 		expect(await prisma.organization.findUnique({ where: { id } })).toMatchObject({
-			name: 'Power Gym',
+			name: 'Remera Trading',
 		});
 		expect(await prisma.organizationAuditEvent.count({ where: { organizationId: id } })).toBe(1);
 		const failed = {
@@ -324,18 +324,18 @@ describe('durable organization and authorization audit', () => {
 			action: OrganizationAuditAction.UPDATE,
 			previousStatus: OrganizationStatus.PENDING,
 			changedFields: ['name'],
-			previousName: 'Power Gym',
-			resultingName: 'Remera Gym',
+			previousName: 'Remera Trading',
+			resultingName: 'Remera Supplies',
 		};
 		await expect(
 			prisma.$transaction(async (transaction) => {
-				await transaction.organization.update({ where: { id }, data: { name: 'Remera Gym' } });
+				await transaction.organization.update({ where: { id }, data: { name: 'Remera Supplies' } });
 				await transaction.organizationAuditEvent.create({ data: failed });
 				throw new Error('Intentional failure after audit insertion');
 			}, options),
 		).rejects.toThrow('Intentional failure');
 		expect(await prisma.organization.findUnique({ where: { id } })).toMatchObject({
-			name: 'Power Gym',
+			name: 'Remera Trading',
 		});
 		expect(await prisma.organizationAuditEvent.count({ where: { organizationId: id } })).toBe(1);
 	});
@@ -345,7 +345,9 @@ describe('durable organization and authorization audit', () => {
 		const data = event(fixture.id, await actor());
 		await expect(
 			prisma.$transaction(async (transaction) => {
-				await transaction.organization.create({ data: { ...fixture, name: 'Soho Gym' } });
+				await transaction.organization.create({
+					data: { ...fixture, name: 'Kimihurura Supplies' },
+				});
 				await transaction.organizationAuditEvent.create({
 					data: { ...data, requestId: 'bad request' },
 				});
