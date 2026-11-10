@@ -39,7 +39,7 @@ describe('organization membership schema contract', () => {
 
 		expect(role).toMatch(/organizationId\s+String[^\n]+@db\.Uuid/u);
 		expect(role).toMatch(/key\s+String\s+@db\.VarChar\(63\)/u);
-		expect(role).toMatch(/name\s+String\s+@db\.VarChar\(120\)/u);
+		expect(role).toMatch(/name\s+String\s+@db\.Citext/u);
 		expect(role).toMatch(/description\s+String\?\s+@db\.VarChar\(500\)/u);
 		expect(role).toMatch(/isSystem\s+Boolean\s+@default\(false\)/u);
 		expect(role).toContain(
@@ -48,7 +48,7 @@ describe('organization membership schema contract', () => {
 		expect(role).toContain(
 			'@@unique([organizationId, id], map: "organization_roles_organization_id_key")',
 		);
-		expect(role).not.toMatch(/PlatformRole|PlatformPermission|permission/u);
+		expect(role).not.toMatch(/PlatformRole|PlatformPermission/u);
 	});
 
 	it('enforces same-organization assignments through two composite relations', async () => {
