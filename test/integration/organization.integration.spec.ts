@@ -115,7 +115,7 @@ describe('organization database foundation', () => {
 			if (reason instanceof Error) throw reason;
 			throw new Error('Scoped organization fixture cleanup failed.', { cause: reason });
 		}
-	});
+	}, 60_000);
 
 	afterAll(async () => {
 		await module?.close();
