@@ -2,35 +2,36 @@
 
 ## Purpose and scope
 
-Keep local, test, staging, and production configuration explicit and isolated.
+Use exactly two persistent Neon branches: development and production, each with its existing default
+database and managed owner. Pooled and direct URLs are two connection methods to the same target.
 
 ## Mandatory engineering requirements
 
-Runtime requires `DATABASE_URL`; migration commands may use `DIRECT_DATABASE_URL`, and development may
-use `SHADOW_DATABASE_URL`. Tests require a disposable `TEST_DATABASE_URL`, a dedicated restricted
-database user, and a human-provisioned `TEST_DATABASE_MARKER` verified through the live connection
-before writes. Validate at startup, use `.env.example` only for fake examples, and keep production
-values in managed secrets. Use UTC database time and `Africa/Kigali` only for business
-presentation/scheduling.
+Provide only `.env.local.example` and `.env.production.example`; actual files remain ignored. Runtime
+uses `DATABASE_URL`; administrative workflows use `DIRECT_DATABASE_URL` for the same database/owner.
+Load only the selected environment file. Accept complete injected production secrets without a file,
+require explicit production selection, reject mixed credentials and verify approved endpoints in
+`neon.environments.json` before connected tools run. Missing endpoint approvals fail closed.
+Use UTC storage and `Africa/Kigali` only for presentation/scheduling. Never log URLs or passwords.
 
 ## Forbidden patterns
 
-No defaults that connect to shared or production databases, checked-in `.env`, environment guessing,
-reusing a production database as a shadow/test database, automatically creating a test safety marker,
-or treating different URL strings as proof of isolation.
+No additional persistent environments, database provisioning, custom roles/users, connection fallbacks,
+production-derived development fixtures, environment guessing or credentials in tracked files. Do not
+mistake a branch label, database name or NODE_ENV alone for proof of the selected target.
 
 ## Correct example
 
-Local Kimihurura Supplies examples use fake credentials, a restricted test role, and an independently
-marked `akiba_test` database.
+The development pooled/direct pair matches one operator-reviewed Neon endpoint, database and managed
+owner; the independently approved production endpoint differs. Approval contains no credentials.
 
 ## Common mistakes
 
-Using a pooled URL for DDL, relying on Node to auto-load `.env`, sharing runtime and test roles, or
-silently falling back after a missing variable or database marker.
+Mixing production URLs with a development label, copying credentials into the endpoint registry, or
+assuming Prisma loads `.env.local` automatically.
 
 ## Review checklist
 
-- Each variable’s consumer and environment are documented.
-- Missing or invalid required settings fail before traffic is accepted.
-- Test execution verifies the connected database marker and effective role privileges before writes.
+- Exactly two environment templates and two approved persistent branch targets.
+- Missing/mismatched inputs fail before connecting; production never loads local development values.
+- Endpoint ownership is verified by the operator; offline schema checks require no connection.
