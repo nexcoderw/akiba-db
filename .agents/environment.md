@@ -21,8 +21,8 @@ or treating different URL strings as proof of isolation.
 
 ## Correct example
 
-Local Soho Gym examples use fake credentials, a restricted test role, and an independently marked
-`nexcode_gym_test` database.
+Local Kimihurura Supplies examples use fake credentials, a restricted test role, and an independently
+marked `akiba_test` database.
 
 ## Common mistakes
 
