@@ -20,8 +20,10 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "prisma.config.ts", "prisma.test.config.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma.config.ts", "scripts/**/*.mjs"],
   "exclude": ["node_modules", "dist"]
 }
