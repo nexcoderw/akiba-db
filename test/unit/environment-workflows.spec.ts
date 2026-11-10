@@ -29,7 +29,8 @@ describe('two-branch Neon workflow', () => {
 			expect(pooled.username).toBe(direct.username);
 			expect(pooled.password).toBe(direct.password);
 			expect(pooled.hostname).not.toBe(direct.hostname);
-			expect(pooled.searchParams.get('sslmode')).toBe('require');
+			expect(pooled.searchParams.get('sslmode')).toBe('verify-full');
+			expect(direct.searchParams.get('sslmode')).toBe('verify-full');
 		}
 	});
 
