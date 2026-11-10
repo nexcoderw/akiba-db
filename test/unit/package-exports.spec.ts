@@ -49,8 +49,10 @@ describe('public package exports', () => {
 	it('exports only the retained foundation model names through Prisma', () => {
 		expect(Object.keys(databasePackage.Prisma.ModelName).sort()).toEqual(
 			[
+				'IdentitySecurityAuditEvent',
 				'Organization',
 				'User',
+				'UserEmailVerificationChallenge',
 				'OrganizationMembership',
 				'OrganizationRole',
 				'OrganizationMembershipRole',
