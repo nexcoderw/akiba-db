@@ -10,13 +10,13 @@ import { OrganizationMembershipTestFixtures } from './organization-membership-te
 import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
 	verifyTestTablePrivileges,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const requiredChecks = [
 	'organization_roles_key_format_check',
 	'organization_roles_name_nonblank_check',
@@ -29,7 +29,7 @@ jest.setTimeout(180_000);
 describe('organization ownership and membership foundation', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let organizations: OrganizationTestFixtures;
 	let identities: PlatformAdminTestFixtures;
 	let authorization: OrganizationMembershipTestFixtures;
@@ -46,7 +46,7 @@ describe('organization ownership and membership foundation', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const [tables, checks, scopedForeignKeys] = await Promise.all([
 			prisma.$queryRaw<{ name: string | null }[]>`
 				SELECT unnest(ARRAY[
@@ -111,8 +111,8 @@ describe('organization ownership and membership foundation', () => {
 		await module?.close();
 	});
 
-	function requireVerified(): VerifiedTestDatabase {
-		if (verified === undefined) throw new Error('Membership test database is not verified.');
+	function requireVerified(): VerifiedDevelopmentDatabase {
+		if (verified === undefined) throw new Error('Membership development database is not verified.');
 		return verified;
 	}
 
