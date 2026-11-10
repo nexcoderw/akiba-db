@@ -1,350 +1,278 @@
 # Akiba Database
 
-Akiba Database (`@nexcoderw/akiba-db`) is the PostgreSQL and Prisma foundation for Akiba, an
-international, multi-organization inventory management SaaS platform. The
-[akiba-db repository](https://github.com/nexcoderw/akiba-db) owns the canonical schema, ordered
-migrations, generated client configuration and a NestJS database library. It is a foundation for an
-enterprise platform; it does not yet provide complete tenant isolation or an inventory domain.
+`@nexcoderw/akiba-db` is the canonical PostgreSQL schema, migration history and NestJS database library
+for Akiba, an enterprise multi-tenant inventory SaaS foundation. The future `akiba-api` owns HTTP,
+authentication flows, effective authorization and business operations. Consumers install an exact
+package version and import its root API; they do not copy schemas or run migrations at application startup.
 
-The future `akiba-api` backend owns authentication flows, effective authorization, tenant resolution,
-HTTP endpoints and business operations. It will consume an exact released package version through the
-root export, without copying schemas, generating its own client or running migrations at startup.
+## Current foundation and scope
 
-## Scope and implemented capabilities
+The schema retains 23 foundation models and 14 enums: global users and password credentials;
+platform staff, roles and permissions; platform sessions, encrypted TOTP, recovery codes and MFA
+challenges; organizations with unique slugs/lifecycle; organization access memberships, roles and
+assignments; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
+and organization/platform/ownership audits. SQL preserves restrictive relations, tenant-composite
+foreign keys, scoped indexes, integrity checks, audit timestamps and onboarding guards.
 
-The current schema contains 23 reusable foundation models:
+`DatabaseModule`, `PrismaService`, `loadDatabaseConfig` and `TenantTransactionService` remain public.
+Prisma has one lifecycle-managed pool per registered module. Tenant transactions parameterize
+`app.current_organization_id` and `app.current_branch_id` locally to the transaction, clearing them
+on commit/rollback. UUID validation is not authorization. There is no Branch model or RLS policy.
 
-| Area                    | Implemented persistence                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Global identity         | `User`, `PasswordCredential`                                                                                                            |
-| Platform administration | `PlatformStaff`, `PlatformRole`, `PlatformPermission`, `PlatformStaffRole`, `PlatformRolePermission`                                    |
-| Platform authentication | `PlatformAdminSession`, `PlatformTotpCredential`, `PlatformRecoveryCode`, `PlatformMfaChallenge`                                        |
-| Organization registry   | `Organization` with unique slug and pending, active, suspended and archived states                                                      |
-| Organization access     | `OrganizationMembership`, `OrganizationRole`, `OrganizationMembershipRole`                                                              |
-| Owner onboarding        | `OrganizationOwnerInvitation`, `OrganizationOwnerInvitationDelivery`, `OrganizationOwnerEnrollmentChallenge`                            |
-| Organization sessions   | `OwnerSession` bound to a global identity                                                                                               |
-| Audit                   | `OrganizationAuditEvent`, `PlatformAuthorizationAuditEvent`, `OrganizationOwnershipAuditEvent`, `OrganizationOwnerAcceptanceAuditEvent` |
+Inventory models, warehouses, stock movements, products, suppliers, sales, organization permission
+mappings, verified custom domains and full tenant authorization remain planned. No seed, default
+administrator, application server or frontend is supplied. Commercial customer plans, subscriptions,
+payments and reminders were retired from the active schema in Task 001.
 
-Organization memberships represent user access eligibility. Organization roles are tenant-owned and
-role assignments use composite foreign keys to prevent cross-organization links. They are independent
-of platform roles and permissions. Organization permission definitions and role-permission mappings
-are **not implemented**. Creating a user, organization, role or invitation grants no authorization.
+## Technology and layout
 
-The library implements validated immutable runtime configuration, a shared Prisma connection pool,
-Nest initialization/shutdown hooks and `TenantTransactionService`. The transaction helper parameterizes
-`app.current_organization_id` and `app.current_branch_id` with transaction-local `set_config` calls.
-Commit and rollback clear context before pooled connections are reused. UUID checks validate shape;
-they do not authenticate an actor or prove access.
-
-There are no seed scripts, seeded administrators, default grants, Docker configuration, API endpoints,
-frontend or inventory models. Warehouses, products, suppliers, customers, stock movements, purchasing,
-sales, domain ownership and full tenant authorization are planned separately.
-
-## Technology and requirements
-
-- Node.js `^20.19.0 || ^22.12.0 || >=24.0.0`, npm 10 or newer; CI uses Node.js 22.
-- TypeScript 5 with strict NodeNext ESM and declaration output.
-- Prisma 7, the `prisma-client` generator, `@prisma/adapter-pg` and `pg`.
-- PostgreSQL with the `citext` and `btree_gist` extensions available to the migration role. The latter
-  remains in the inherited migration chain even though current models do not require it.
-- NestJS 11, `reflect-metadata` and RxJS as peers in the consuming application.
-- Jest/ts-jest for unit and PostgreSQL integration tests; ESLint and Prettier for authored sources.
-- GitHub Packages authentication for publishing or installing the private scoped library. Public
-  dependency installation uses the committed npm lockfile. Keep registry tokens outside the repository.
-
-## Repository architecture
+Use npm 10+ and Node.js `^20.19.0 || ^22.12.0 || >=24.0.0` (CI uses Node 22). Actual dependencies are
+Prisma 7, `@prisma/adapter-pg`, `pg`, strict TypeScript/NodeNext ESM, NestJS 11 peers, Jest/ts-jest,
+ESLint and Prettier. Neon supports standard PostgreSQL clients; the existing adapter is retained.
+The historical chain requires PostgreSQL `citext` and `btree_gist` extension support.
 
 ```text
-.agents/                 mandatory engineering rules
-.github/workflows/       package verification; no deployment job
-prisma/schema.prisma     canonical PostgreSQL models and enums
-prisma/migrations/       immutable history and forward migrations
-prisma.config.ts         development/production migration configuration
-prisma.test.config.ts    explicitly selected disposable migration target
-src/config/             environment validation
-src/database/           Nest module, Prisma lifecycle, tenant transactions
-src/types/              tenant context contract
-src/generated/prisma/   ignored Prisma-generated TypeScript
-src/index.ts            public package exports
-test/unit/              configuration, contracts, identity and migration checks
-test/integration/       restricted-role PostgreSQL tests and scoped fixtures
+.agents/                      mandatory engineering rules
+.github/workflows/            offline package verification
+neon.environments.json        approved non-secret branch endpoint identities
+prisma/schema.prisma          canonical models and enums
+prisma/migrations/            immutable SQL history
+prisma.config.ts              guarded direct datasource or offline schema commands
+scripts/                      environment validation, migration and integration runners
+src/config/                   immutable runtime configuration
+src/database/                 Nest lifecycle and tenant transactions
+src/types/                    database contracts
+src/generated/prisma/         ignored Prisma-generated TypeScript
+src/index.ts                  package root exports
+test/unit/                    offline tests, schema/SQL and safety contracts
+test/integration/             development-only PostgreSQL suites and scoped fixtures
 ```
 
-Generated sources compile together with authored sources into ignored `dist/`. Only `dist/` and this
-README ship in the package. The public root exports configuration, the Nest module, Prisma and tenant
-services, tenant types and the generated Prisma client/types/enums. Consumers must not deep-import
-private paths. Durable package guidance lives here; agent-only conventions remain in `.agents/`.
+Generation writes ignored client sources, then build compiles them and authored TypeScript to `dist/`
+with declarations. Only `dist/` and README ship in the package. CLI scripts and branch approvals belong
+to this repository, not the published runtime library. No dependency or adapter replacement is required.
 
-## Installation and environment configuration
+## Exactly two Neon environments
 
-Run commands from `api/db` in this workspace, or from the root of a standalone `akiba-db` clone:
+Use the existing default database and Neon-managed owner in exactly two persistent branches:
+`development` and `production`. Do not provision extra databases or custom PostgreSQL users/roles.
+Keep development synthetic and independent of real organization data; never copy production rows into it.
+No Neon console/API resource is created or modified by these scripts.
+
+Only two templates are tracked:
+
+- `.env.local.example` → ignored `.env.local` for development.
+- `.env.production.example` → optional ignored `.env.production` for production.
+
+Each contains `NODE_ENV`, `DATABASE_URL` and `DIRECT_DATABASE_URL`. The pooled URL serves runtime
+queries; the direct URL serves administrative commands. They must use the **same database and managed
+owner/password on the same branch**, not independent resources. Copy exact Neon connection strings;
+placeholders do not provision anything. TLS is required. Optional Neon `channel_binding=require` is
+accepted. Routing overrides and duplicate/unsupported URL options are rejected by repository tools.
+Runtime also supports `DATABASE_POOL_MAX` (default 10 per process) and
+`DATABASE_CONNECTION_TIMEOUT_MS` (default 10000); both must be positive integers.
 
 ```bash
+# From api/db in this workspace, or the standalone repository root:
 npm ci
 cp .env.local.example .env.local
-cp .env.migrations.local.example .env.migrations.local
-cp .env.test.local.example .env.test.local
 ```
 
-Replace every placeholder with independently provisioned values. These copies do not create databases,
-users, TLS certificates or grants. Local TLS settings must match the PostgreSQL server; never carry an
-insecure local override into hosted environments. Keep all actual `.env*` files ignored.
+Fill the two URLs privately. Then an operator must verify each branch in Neon and fill
+`neon.environments.json` with its direct hostname, default database and existing managed username.
+Both hostnames are intentionally empty initially: connected commands fail until both distinct endpoints
+are approved. This file contains identities, never passwords or complete connection URLs. It prevents
+a production URL mislabeled as development (or the reverse) from being accepted. Protect review of
+this trust configuration; it is not a live Neon API attestation and must be updated when endpoints change.
 
-| Variable                         | Consumer and purpose                                                                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | Runtime application role; required by `loadDatabaseConfig`. Production Prisma CLI also uses this name, with a separately supplied migration credential. |
-| `DATABASE_POOL_MAX`              | Optional runtime pool limit per process; default `10`. Budget across all replicas.                                                                      |
-| `DATABASE_CONNECTION_TIMEOUT_MS` | Optional positive runtime connection timeout; default `10000`.                                                                                          |
-| `DIRECT_DATABASE_URL`            | Local migration DDL role and direct connection, preferred over `DATABASE_URL`. In test configuration, a passwordless reference target only.             |
-| `SHADOW_DATABASE_URL`            | Separate disposable development shadow database that Prisma may reset. Never a valuable or shared database.                                             |
-| `TEST_MIGRATION_DATABASE_URL`    | Migration role for an independently disposable test database; consumed only by `prisma.test.config.ts`.                                                 |
-| `TEST_DATABASE_URL`              | Restricted integration-test role on the disposable test database.                                                                                       |
-| `TEST_DATABASE_MARKER`           | UUID provisioned by a human for that exact disposable database and verified against its database comment before fixture writes.                         |
-| `NODE_ENV`                       | Production CLI uses `.env.production`; other migration commands load `.env.migrations.local`. Test scripts use `test`.                                  |
+Development tools load only `.env.local`. Complete injected development credentials are also supported;
+conflicting injected/local values fail. Production tools require an already injected
+`NODE_ENV=production`, load only the optional `.env.production`, and accept a complete injected URL
+pair without any physical file. Injected production credentials take precedence; partial pairs or
+mixed identities fail. No connection URL fallback exists. The runtime library loads no dotenv files;
+`akiba-api` must load its selected environment and validate before accepting traffic.
 
-The library never loads dotenv files automatically. The API loads its runtime environment and calls
-`loadDatabaseConfig` before accepting traffic. The CLI loads its dedicated environment without
-sourcing shell commands. Production CLI ignores `DIRECT_DATABASE_URL` and `SHADOW_DATABASE_URL`; pass
-migration-role credentials as `DATABASE_URL` through a protected environment, never the API process.
+## Offline validation and client generation
 
-## Local development and Prisma commands
-
-Provision separate `akiba_dev`, `akiba_shadow` and `akiba_test` databases and distinct least-privilege
-runtime (`akiba_app`), migration (`akiba_migrator`) and test (`akiba_test`) roles. A database owner must
-provision extensions and grants deliberately. Examples are fictional and create no default passwords.
-
-Schema-only checks require a syntactically valid CLI URL but do not connect to PostgreSQL:
+No credentials, environment file, fabricated URL or live database is required:
 
 ```bash
 npm run prisma:format
 npm run prisma:validate
 npm run prisma:generate
-npm run typecheck
-npm run build
-```
-
-For a reviewed, dedicated local development database, inspect status and deploy committed migrations:
-
-```bash
-npm run migration:status
-npm run migration:deploy
-```
-
-To prepare a **future** schema change, edit the canonical schema, then create SQL for review:
-
-```bash
-npm run migration:create -- --name describe_schema_change
-```
-
-`migration:create` runs `prisma migrate dev --create-only`: it still needs a development connection
-and a disposable shadow database and may offer a reset when drift exists. Never use it against an
-unknown or production database. Review generated SQL, locks, constraints, privileges and compatibility
-before testing or deploying. Never use production `db push` or automatic startup migrations.
-
-## Migration strategy and recovery
-
-Persistent deployment status could not be verified during this cleanup. The existing production
-workflow and historical repair migrations are reasons to treat all inherited migration SQL as
-potentially applied. All 25 inherited SQL files and `migration_lock.toml` remain byte-for-byte unchanged;
-`test/unit/migration-history-checksums.json` records their checksums. No baseline, squash, reset,
-checksum rewrite or live database operation is part of the cleanup.
-
-`20261110120000_retire_legacy_commercial_models` is a manually authored, forward-only migration that
-removes eight obsolete commercial tables, their constraints/indexes/triggers, nine enum types and eight
-trigger functions. These are customer plan registrations, associated financial records and delivery
-records, rather than organization access memberships. Their original object definitions and names
-remain **only in immutable migration history and the retirement SQL**, as required for safe replay.
-They are absent from the active Prisma schema, client API and business tests.
-
-Before deployment, the database owner must confirm the target and migration status, stop old writers,
-review dependencies and take a backup with a tested restore path. The migration takes exclusive locks
-with a 10-second lock timeout and 60-second statement timeout. It locks all eight tables before
-checking them, disables RLS filtering for the emptiness check (or fails if the role cannot bypass it),
-and **refuses to proceed if any table contains even one row**, including audit or financial evidence.
-It uses restrictive drops, retains shared extensions and leaves identity, authorization, onboarding,
-session and security-audit objects intact. Unexpected dependencies cause a transaction rollback.
-
-A populated target requires a separate human-approved archival and retention plan before retirement.
-Do not truncate records, bypass the guard or weaken audit protections. An unused new database can
-replay the complete chain, including retirement; retaining the chain prevents checksum conflicts on
-existing environments. A new baseline can be considered only after deployment inventory proves it safe.
-
-If retirement fails, its DDL rolls back. Investigate the reported data, lock or dependency problem;
-Prisma may record a failed migration that the database owner must inspect and resolve as rolled back
-before retrying unchanged SQL. Do not mark unapplied changes as applied. After success, prefer a forward
-fix. Restoring old client code alone cannot restore dropped tables. Coordinate compatible clients and
-an approved database restore or forward repair; do not deploy old commercial clients afterward.
-
-The package identity is now `@nexcoderw/akiba-db@0.2.0`. Removing generated models is a breaking contract
-change from the inherited pre-1.0 library. Publish only after migration review and verification, and
-pin the exact version in `akiba-api`. No package publication or Git push occurs automatically.
-
-## Validation and testing
-
-Run after installation and client generation:
-
-```bash
-npm run prisma:validate
 npm run format:check
 npm run lint
 npm run typecheck
-npm run test:unit
+npm test
 npm run build
-node --input-type=module -e "await import('./dist/index.js')"
-npm pack --dry-run --ignore-scripts
+node --input-type=module -e "await import('@nexcoderw/akiba-db')"
 ```
 
-Unit coverage includes configuration validation/redaction, module exports, parameterized tenant
-transactions and initialization failures, foundation schema contracts, onboarding repair SQL,
-database test safety, branding, immutable migration checksums and the guarded retirement contract.
-The identity audit includes hidden tracked files, new nonignored files and filenames. It inspects npm
-project metadata while excluding unrelated third-party integrity hashes and dependency metadata.
+`npm test` and `npm run test:unit` run only the offline unit project. CI validates/generates, checks
+formatting/lint/types, runs unit tests, builds and loads compiled exports. CI has no database secrets,
+provisioning, automatic migration, publication or deployment job.
 
-CI runs schema validation, generation, formatting, linting, type checking, unit tests, build and compiled
-export loading. It does not connect to a database, publish packages or deploy migrations. PostgreSQL
-integration tests require independent provisioning and are not silently counted as passing in CI.
+## Shadow-free migration workflow
 
-### Disposable PostgreSQL integration tests
+The installed Prisma 7.10 CLI supports a current-datasource-to-schema diff without provisioning another
+database. All connected scripts validate the selected branch before invoking Prisma. Only reviewed
+status, datasource/schema diff and deploy operations are supported by this configuration.
 
-A human database owner must independently verify a disposable target, create a unique marker UUID,
-and set the comment on **that database only**, using the same UUID in `.env.test.local`:
+1. Start a controlled development window, confirm approved endpoints, and run status plus a drift
+   check **before** editing the schema:
 
-```sql
-COMMENT ON DATABASE akiba_test IS
-  'akiba:disposable-integration-test:00000000-0000-4000-8000-000000000000';
-```
+   ```bash
+   npm run migration:status
+   npm run migration:check
+   ```
 
-The UUID shown is a placeholder, not a reusable marker. The suite never creates a marker or provisions
-its own trust. A database copied from another target needs a new marker. Never use production-derived
-data. The rebranded marker prefix deliberately requires re-provisioning an existing disposable target.
+2. With history synchronized, edit `prisma/schema.prisma`, validate it, and draft SQL:
 
-Use a test role with `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION` and `NOBYPASSRLS`;
-it must not own the database/tables or inherit schema creation or migration privileges. The owner
-reviews effective grants including `PUBLIC` and inherited roles. The restricted test connection must
-have no DDL rights and must differ from runtime/migration/shadow identities. Test-only provisioning:
+   ```bash
+   npm run prisma:validate
+   npm run --silent migration:diff > /tmp/akiba-change.sql
+   ```
 
-```sql
-REVOKE CREATE ON DATABASE akiba_test FROM PUBLIC, akiba_test;
-REVOKE CREATE ON SCHEMA public FROM PUBLIC, akiba_test;
-GRANT CONNECT ON DATABASE akiba_test TO akiba_test;
-GRANT USAGE ON SCHEMA public TO akiba_test;
-```
+   Check the exit status before using the output. The wrapper verifies migration status first and
+   routes its diagnostic output to stderr, keeping stdout for SQL. Internally it uses
+   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`.
+   It does not execute the SQL. Review destructive statements, locks, data backfills and compatibility.
 
-After reviewing the target and migration SQL, deploy using the separate test migration credential:
+3. Manually create a new `prisma/migrations/<UTC timestamp>_<snake_case_description>/migration.sql`
+   containing the reviewed SQL. Add/review custom SQL for CHECK constraints, partial indexes, RLS,
+   functions, triggers and other features Prisma does not fully represent. A clean Prisma diff cannot
+   certify those controls. Never pipe the draft into execution or rewrite applied SQL.
+
+4. Apply only committed/reviewed migrations to development, then verify:
+
+   ```bash
+   npm run migration:deploy
+   npm run migration:status
+   npm run migration:check
+   npm run prisma:validate
+   npm run prisma:generate
+   npm run test:integration
+   ```
+
+`migration:check` uses `--exit-code`: 0 means no Prisma-supported schema difference, 2 means a
+difference, 1 means an error. It checks history status first. It is a schema comparison, not full
+migration replay or complete manual-SQL drift detection. Review custom objects separately using
+catalog queries and the retained integration tests. This two-environment workflow does not prove
+fresh replay unless an independently authorized environment/resource is available; none is created.
+
+### Production deployment and recovery
+
+Use a protected deployment process with explicit human approval, target verification, compatible
+clients, a restorable backup and SQL/lock review. Inject production secrets; do not put URLs in commands:
 
 ```bash
-npm run migration:test:deploy
+NODE_ENV=production npm run migration:production:status
+NODE_ENV=production npm run migration:production:deploy
+NODE_ENV=production npm run migration:production:status
+NODE_ENV=production npm run migration:production:check
 ```
 
-Then, through the disposable database owner's connection, grant only the test tables used by the
-suite. These teardown privileges are exclusively for disposable tests, never runtime accounts:
+A pending migration makes status nonzero; inspect the pending list rather than treating this as drift
+proof or bypassing a failed migration. Deployment applies tracked pending SQL using Prisma's normal
+migration locking. The repository does not grant approval, invoke deployment automatically, reset
+schema/data or provision PostgreSQL roles. Do not overlap migration operations with integration tests.
+After failures, inspect the exact migration record and transaction outcome, then use reviewed forward
+recovery. Never falsely resolve unapplied SQL as applied or change historical checksums.
 
-```sql
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
-  public.users, public.password_credentials, public.platform_staff,
-  public.platform_roles, public.platform_permissions, public.platform_staff_roles,
-  public.platform_role_permissions, public.platform_admin_sessions,
-  public.platform_totp_credentials, public.platform_recovery_codes,
-  public.platform_mfa_challenges, public.organizations, public.organization_memberships,
-  public.organization_roles, public.organization_membership_roles,
-  public.organization_owner_invitations, public.organization_ownership_audit_events,
-  public.organization_owner_invitation_deliveries,
-  public.organization_owner_enrollment_challenges,
-  public.organization_owner_acceptance_audit_events, public.owner_sessions,
-  public.organization_audit_events, public.platform_authorization_audit_events
-TO akiba_test;
-```
+All inherited migration SQL, including the Task 001 retirement, remains unchanged. The retirement is
+still guarded: it locks all eight retired commercial tables and aborts if any rows exist, including
+financial/audit records. Unexpected dependencies also abort. A populated target requires a separate
+approved archival/retention plan; do not bypass its guard. Historical references to former disposable
+validation infrastructure remain only in immutable SQL comments to avoid checksum conflicts.
 
-Run the suites:
+## Integration tests on development
+
+All ten useful integration suites are retained. Run them only during an **exclusive synthetic
+development maintenance window** after stopping applications, workers and other clients:
 
 ```bash
 npm run test:integration
-npm test
 ```
 
-Local scripts load `.env.local` and `.env.test.local` using Node's env-file support. Alternatively,
-`npm run test:integration:managed` uses an explicitly injected environment with no dotenv files.
-Never inject the migration credential into a test runner.
+The runner refuses production and unexpected arguments, validates the approved pooled/direct pair,
+opens a direct coordinator session, checks actual database/user, acquires a session advisory lease,
+refuses other existing client sessions and verifies every local migration's completed checksum. It
+then launches Jest serially. Every suite verifies the live coordinator/lease through its actual Prisma
+connection before fixture writes or cleanup. Direct Jest invocation lacks this coordinator and fails.
+A second cooperating runner cannot start. Coordinator connection loss terminates the child runner.
+The coordinator PID is transient process coordination, not persistent database data or a new configured
+connection/marker. Nothing is provisioned, and migrations are never applied automatically by tests.
 
-The guard verifies the connected database name, role, exact database comment and effective
-administrative privileges before fixture writes or cleanup. URL comparisons reject common aliases,
-shared targets, reused roles and obvious production names, but those heuristics do not prove isolation.
-Tests fail when configuration or provisioning is missing. Fixture cleanup targets only reserved UUIDs,
-handles partial setup and preserves unrelated sentinel records. Integration coverage exercises actual
-constraints, competing writes, onboarding integrity, rollback, pooled tenant context and the final
-migrated table set; it is not proof of RLS authorization.
+Fixture writes use reserved UUIDs and synthetic example-domain identities. Cleanup is restricted to
+those exact fixtures and ordered through restrictive references; rollback, partial setup, concurrency
+and sentinel-preservation coverage remains. These tests intentionally commit some temporary fixture
+rows to test races and persistence, so they cannot all run inside one rollback transaction. A stopped
+process can leave tracked synthetic records requiring deliberate, scoped recovery; never blanket-delete.
 
-## Security boundaries and planned work
+The advisory lease coordinates test runners, not uncooperative applications or administrators. Keep the
+maintenance window exclusive for its entire duration; the startup session check cannot stop a later
+application connection. If this cannot be ensured, keep the integration run blocked. Missing credentials,
+endpoint approvals, access, synchronized migrations or exclusive access is a failure, never a silent skip.
 
-- **Tenant isolation is incomplete.** No migration enables PostgreSQL RLS or creates policies. Composite
-  tenant foreign keys protect many relationships, but ordinary queries can access multiple tenants if
-  their connection privileges permit it. `TenantTransactionService` prepares context only. The future
-  API must authenticate, authorize live organization/user/membership state and scope every read/write,
-  nested relation and raw query. A subdomain or caller-supplied UUID is never authorization.
-- **Tenant resolution is planned.** Unique lowercase slugs, reserved-name checks and lifecycle states
-  exist. `admin.akiba.com`, `musomesa.akiba.com` and `companyb.akiba.com` illustrate planned routing.
-  Verified domain ownership, DNS/certificate handling, collision policy and trusted hostname resolution
-  need dedicated implementation. Branch context is retained as a utility; no Branch model exists.
-- **Authorization is partial persistence.** Platform permissions are explicitly mapped through roles;
-  organization custom roles and assignments exist without a permission catalog or grants. Superadmin
-  bootstrap, trusted system roles and platform operations require explicit approval, separate
-  interfaces and auditing. `isSystem`, `owner`, active status or login alone confer no effective access.
-- **Authentication flows belong to the API.** Stored password hashes, session digests, encrypted TOTP
-  factors, recovery-code digests and MFA challenge attempts are infrastructure, not working login,
-  logout, MFA or account recovery. Implement approved hashing, replay prevention, conditional one-time
-  consumption, revocation and fresh authorization checks before exposing traffic.
-- **Onboarding remains security-sensitive.** Delivery records contain erasable encrypted token and
-  email snapshots, worker leases, bounded retries and uncertain provider outcomes. Encryption keys
-  stay outside PostgreSQL. Never blindly resend an uncertain delivery. Enrollment proof must bind the
-  exact recipient/invitation/organization and consume atomically with membership, role and audit writes.
-  Successful provider acceptance is not proof of email delivery or user identity.
-- **Grants are an operational prerequisite.** This package supplies one configured connection and
-  does not provision deployment roles. Separate platform identity access, tenant runtime DML,
-  read-only operations and DDL privileges. Runtime accounts must not own tables, create schema objects,
-  bypass RLS or modify/delete audit history. Audit timestamps/operator identities have SQL protection;
-  append-only access also depends on reviewed grants and is not universally trigger-enforced.
-- **Sensitive data requires lifecycle policy.** Require hosted TLS and encryption at rest; keep secrets
-  in managed storage, parameterize queries, redact connection URLs and personal data, and review
-  retention/erasure for credentials, sessions, encrypted delivery material, audit events and backups.
-  Soft deletion is not erasure. Store timestamps in UTC; use `Africa/Kigali` only for display/scheduling.
+## Tenant isolation and owner-role limitations
 
-The next database phase should define the organization permission catalog and grants, trusted
-superadmin provisioning, live authorization invariants, tenant-safe relationship rules and fail-closed
-RLS policies tested under actual non-owner roles. Keep platform and organization privilege boundaries
-explicit. Add domain ownership and tenant resolution separately, then introduce inventory models in
-reviewed increments after isolation and authorization are established.
+The managed Neon owner is used for both runtime and administrative connections as requested. No custom
+role/user provisioning or replacement grants are introduced. Existing PUBLIC revokes, integrity
+constraints, transaction handling, tenant-composite relationships and audit controls remain.
 
-## Consuming from akiba-api and release control
+**Complete organization isolation is not implemented or verified.** No migration enables RLS, creates
+policies or forces RLS. The current `TenantTransactionService` establishes context only; it does not
+restrict a broad query. Ownership commonly bypasses RLS, and Neon managed administrative membership can
+include BYPASSRLS. FORCE RLS does not constrain a BYPASSRLS identity. Default-owner use also permits DDL
+and audit mutation beyond a least-privilege runtime account. These are acknowledged production-security
+limitations, not fixed by simpler environment files or passing owner-based constraint tests.
 
-Install an exact published version after setting up GitHub Packages authentication:
+Before enabling live tenant traffic, verify actual role attributes/memberships, table ownership,
+`relrowsecurity`, `relforcerowsecurity` and `pg_policies`, then implement a reviewed enforceable
+isolation design compatible with the chosen identity. `akiba-api` must authenticate and authorize live
+user, membership, organization and permission state, scope every query/nested relation/write and audit
+privileged work. A slug, subdomain, header, UUID or active status alone is not authorization. Subdomains
+such as `musomesa.akiba.com` and platform routing at `admin.akiba.com` remain planned, including domain
+ownership verification. Never expose owner credentials to a tenant or browser.
 
-```bash
-npm install --save-exact @nexcoderw/akiba-db@0.2.0
-```
+Password/session/MFA/enrollment rows are persistence, not complete authentication flows. Protect
+password hashes, token digests, encrypted invitation/email material and MFA keys; consume one-time proof
+atomically and reconcile uncertain provider outcomes without blind resend. Preserve TLS, managed
+secrets, redacted logging, UTC timestamps, bounded queries and short transactions. Retention/erasure
+policies for identities, encrypted delivery data, audits and backups still need dedicated review.
 
-Register the module once and enable Nest shutdown hooks in the API:
+## Task 001 audit and remaining verification
 
-```typescript
-import { Module } from '@nestjs/common';
-import { DatabaseModule, loadDatabaseConfig } from '@nexcoderw/akiba-db';
+| Requirement                                                                           | Status after repository inspection                    |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Akiba package/repository identity and authored branding                               | PASS                                                  |
+| Commercial-domain removal from active schema/client                                   | PASS                                                  |
+| Reusable organization, identity, roles, MFA, sessions, onboarding and audits retained | PASS                                                  |
+| Tenant transaction context and composite relationship safeguards retained             | PASS                                                  |
+| Schema/migration files preserved through Task 002                                     | PASS                                                  |
+| Tenant isolation as a complete production security boundary                           | PARTIAL: no RLS or complete authorization enforcement |
+| Migration replay, applied status and populated-target retirement                      | NOT VERIFIED without approved Neon access             |
+| Actual Neon role ownership/privileges and production readiness                        | NOT VERIFIED                                          |
 
-@Module({
-  imports: [DatabaseModule.forRoot(loadDatabaseConfig())],
-})
-export class AppModule {}
-```
+Unit, type, lint, build and package verification must be reported from executed results; this table
+never substitutes for a live deployment audit. Task 002 changes no models, enums or migration SQL.
+The next phase should first verify development migration/SQL integrity, then implement organization
+permission mappings, trusted administrator provisioning and enforceable tenant authorization before
+introducing inventory features.
 
-The API owns environment loading and must enable `app.enableShutdownHooks()` during bootstrap. Use one
-pool per process. Do not run migrations or client generation inside the API. For a tenant operation,
-prove organization access before calling the transaction service and use only the supplied transaction
-client with explicit organization scope. Keep network calls outside transactions.
+## Consuming and contributing
 
-The inherited SSH production deployment script and job were removed because their host, OS user,
-paths and release cleanup belonged to a different deployment. Future Akiba deployment requires an
-explicit target, protected approval, least-privilege credentials, reviewed SQL, backup and restore
-verification. Package checks alone do not authorize a production migration.
+After a separately verified release, `akiba-api` pins `@nexcoderw/akiba-db@0.2.0`, loads its runtime
+pooled `DATABASE_URL`, registers `DatabaseModule.forRoot(loadDatabaseConfig())` once and enables Nest
+shutdown hooks. Consumers receive generated client code and declarations without generation. Package
+rollback cannot recreate retired tables; coordinate compatible clients and reviewed database recovery.
 
-Automated contributors must read [AGENTS.md](AGENTS.md), [.agents/README.md](.agents/README.md) and all
-applicable topic rules. Their default workflow restricts command execution and Git writes unless a
-human task explicitly overrides it. This cleanup task authorizes verification; it does not authorize
-production changes, publication, commits or pushes.
+Read [AGENTS.md](AGENTS.md) and [.agents/README.md](.agents/README.md) before changes. Default agent
+command/Git restrictions remain unless a human task explicitly authorizes verification. No commit,
+push, publication, resource provisioning or production change is automatic.
+
+Technical references: [Prisma 7 CLI](https://www.prisma.io/docs/orm/v7/reference/prisma-cli-reference),
+[PostgreSQL/Neon compatibility](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/postgresql),
+[Neon connections](https://neon.com/docs/guides/prisma),
+[Neon managed roles](https://neon.com/docs/manage/roles), and
+[PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
