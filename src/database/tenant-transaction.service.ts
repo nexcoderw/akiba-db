@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { Injectable } from '@nestjs/common';
 
 import type { Prisma } from '../generated/prisma/client.js';
@@ -18,10 +20,12 @@ export type TenantTransactionCallback<TResult> = (
  * `current_setting(name, true)` and deny access when organization context is absent.
  *
  * PostgreSQL clears these transaction-local values on commit or rollback, preventing pooled
- * connections from carrying tenant context into later transactions.
+ * connections from carrying tenant context into later transactions. Nested calls fail before a second
+ * transaction opens; callers must reuse the existing callback client instead of starting a new scope.
  */
 @Injectable()
 export class TenantTransactionService {
+	private readonly execution = new AsyncLocalStorage<boolean>();
 	constructor(private readonly prisma: PrismaService) {}
 
 	async run<TResult>(
@@ -29,21 +33,23 @@ export class TenantTransactionService {
 		operation: TenantTransactionCallback<TResult>,
 		options?: Readonly<{ maxWait: number; timeout: number }>,
 	): Promise<TResult> {
-		this.assertUuid(context.organizationId, 'organizationId');
-		if (context.branchId !== undefined) {
-			this.assertUuid(context.branchId, 'branchId');
+		if (this.execution.getStore() === true) {
+			throw new Error('Nested tenant transactions are not supported.');
 		}
-
-		return this.prisma.$transaction(async (transaction) => {
+		// Capture once before scheduling; a caller mutating its object cannot change validated scope.
+		const { organizationId, branchId } = context;
+		this.assertUuid(organizationId, 'organizationId');
+		if (branchId !== undefined) this.assertUuid(branchId, 'branchId');
+		const budget = options === undefined ? undefined : { ...options };
+		return this.execution.run(true, () => this.prisma.$transaction(async (transaction) => {
 			await transaction.$queryRaw`
-				SELECT set_config('app.current_organization_id', ${context.organizationId}, true)
+				SELECT set_config('app.current_organization_id', ${organizationId}, true)
 			`;
 			await transaction.$queryRaw`
-				SELECT set_config('app.current_branch_id', ${context.branchId ?? ''}, true)
+				SELECT set_config('app.current_branch_id', ${branchId ?? ''}, true)
 			`;
-
 			return operation(transaction);
-		}, options);
+		}, budget));
 	}
 
 	private assertUuid(value: string, field: keyof TenantContext): void {
