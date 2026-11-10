@@ -7,10 +7,10 @@ package version and import its root API; they do not copy schemas or run migrati
 
 ## Current foundation and scope
 
-The schema retains 25 foundation models and 14 enums: global users and password credentials;
+The schema retains 28 foundation models and 14 enums: global users and password credentials;
 platform staff, roles and permissions; platform sessions, encrypted TOTP, recovery codes and MFA
 challenges; organizations with unique slugs/lifecycle; organization access memberships, roles and
-assignments; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
+assignments and versioned organization permission mappings; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
 global mailbox proofs and identity security audits; and organization/platform/ownership audits.
 SQL preserves restrictive relations, tenant-composite
 foreign keys, scoped indexes, integrity checks, audit timestamps and onboarding guards.
@@ -20,10 +20,20 @@ Prisma has one lifecycle-managed pool per registered module. Tenant transactions
 `app.current_organization_id` and `app.current_branch_id` locally to the transaction, clearing them
 on commit/rollback. UUID validation is not authorization. There is no Branch model or RLS policy.
 
-Inventory models, warehouses, stock movements, products, suppliers, sales, organization permission
-mappings, verified custom domains and full tenant authorization remain planned. No seed, default
+Inventory models, warehouses, stock movements, products, suppliers, sales, verified custom domains
+and full tenant authorization remain planned. No broad seed, default
 administrator, application server or frontend is supplied. Commercial customer plans, subscriptions,
 payments and reminders were retired from the active schema in Task 001.
+
+The Step 4 forward migration adds a version-controlled organization permission catalog, tenant-composite
+role-permission mappings, case-insensitive role-name uniqueness, role and membership authorization
+versions, and append-only authorization audit records. Existing role assignments are retained.
+The eight catalog rows are migration data, not runtime-created privileges. A custom role cannot use
+the protected owner key or reserved administrative names. Assignment and permission mapping foreign
+keys use organization-leading composites. The API owns all effective-permission and lifecycle policy;
+these schema constraints do not themselves authorize a request. Review case-insensitive duplicate
+role names and legacy reserved identifiers before applying this migration; conflicts make deployment
+fail safely.
 
 ## Technology and layout
 
