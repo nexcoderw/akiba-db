@@ -80,8 +80,9 @@ cp .env.local.example .env.local
 
 Fill the two URLs privately. Then an operator must verify each branch in Neon and fill
 `neon.environments.json` with its direct hostname, default database and existing managed username.
-Both hostnames are intentionally empty initially: connected commands fail until both distinct endpoints
-are approved. This file contains identities, never passwords or complete connection URLs. It prevents
+Connected commands fail until both distinct endpoints are approved; a blank hostname means that branch
+has not been approved. Pooled and direct hosts from one URL pair identify the same branch and cannot
+fill both entries. This file contains identities, never passwords or complete connection URLs. It prevents
 a production URL mislabeled as development (or the reverse) from being accepted. Protect review of
 this trust configuration; it is not a live Neon API attestation and must be updated when endpoints change.
 
@@ -291,6 +292,11 @@ RLS/FORCE RLS activation, policies and table privileges. It creates no role, dat
 and accepts no production target/arguments. Exit 2 means the observed configuration blocks a database
 isolation claim; exit 1 means diagnostics failed. Even active RLS requires independent policy review.
 No diagnostic result has been produced during implementation.
+
+Configuration failures identify the missing approval or invalid setting without printing URLs or
+passwords. Known connection failures report a safe category; raw driver messages remain private.
+If production is still unapproved, supply its independently verified direct hostname before retrying;
+never reuse the development hostname to satisfy the guard.
 
 TenantTransactionService now captures validated IDs before scheduling and rejects nested calls in an
 asynchronous chain. Reuse the existing callback client instead of opening another tenant scope.
