@@ -198,15 +198,17 @@ describe('database integration', () => {
 		]);
 	});
 	it('rejects a nested tenant scope and clears the rolled back outer context', async () => {
-		await expect(tenantTransactions.run({ organizationId: ORGANIZATION_A_ID }, () =>
-			tenantTransactions.run({ organizationId: ORGANIZATION_B_ID }, readTenantSettings),
-		)).rejects.toThrow('Nested tenant transactions');
+		await expect(
+			tenantTransactions.run({ organizationId: ORGANIZATION_A_ID }, () =>
+				tenantTransactions.run({ organizationId: ORGANIZATION_B_ID }, readTenantSettings),
+			),
+		).rejects.toThrow('Nested tenant transactions');
 		await expect(readEveryPooledConnection(prisma)).resolves.toEqual([
 			{ organizationId: null, branchId: null },
 			{ organizationId: null, branchId: null },
 		]);
-		await expect(tenantTransactions.run({ organizationId: ORGANIZATION_B_ID }, readTenantSettings))
-			.resolves.toEqual({ organizationId: ORGANIZATION_B_ID, branchId: null });
+		await expect(
+			tenantTransactions.run({ organizationId: ORGANIZATION_B_ID }, readTenantSettings),
+		).resolves.toEqual({ organizationId: ORGANIZATION_B_ID, branchId: null });
 	});
-
 });
