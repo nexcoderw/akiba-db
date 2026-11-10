@@ -187,7 +187,7 @@ describe('organization owner invitation delivery foundation', () => {
 				id: invitationId,
 				organizationId,
 				invitedEmail: `future-owner-${invitationId}@example.com`,
-				invitedDisplayName: 'Future Gym Owner',
+				invitedDisplayName: 'Future Organization Owner',
 				invitedByPlatformStaffId: actorId,
 			},
 		});
@@ -306,7 +306,7 @@ describe('organization owner invitation delivery foundation', () => {
 
 	it('rejects cross-organization delivery links and duplicate invitation reservations', async () => {
 		const organizationId = await createOrganization();
-		const otherOrganizationId = await createOrganization('Nyamirambo Fitness');
+		const otherOrganizationId = await createOrganization('Nyamirambo Supplies');
 		const actorId = await createActor();
 		const invitationId = await createInvitation(organizationId, actorId);
 
