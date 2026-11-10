@@ -31,3 +31,10 @@ that points to another organization.
 
 - Every tenant query and constraint includes organization context.
 - Tests prove missing/wrong tenant context cannot return or modify records.
+
+## Neon owner limitation
+
+The two-branch deployment uses the existing managed owner and creates no custom PostgreSQL users.
+No current migration enables RLS or creates tenant policies. Ownership and BYPASSRLS can defeat row
+filtering; FORCE RLS alone does not constrain BYPASSRLS. Preserve trusted API scoping and transactional
+context, and do not describe this foundation as enforcing complete tenant isolation.
