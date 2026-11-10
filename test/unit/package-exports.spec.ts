@@ -45,4 +45,34 @@ describe('public package exports', () => {
 			ALREADY_GRANTED: 'ALREADY_GRANTED',
 		});
 	});
+
+	it('exports only the retained foundation model names through Prisma', () => {
+		expect(Object.keys(databasePackage.Prisma.ModelName).sort()).toEqual(
+			[
+				'Organization',
+				'User',
+				'OrganizationMembership',
+				'OrganizationRole',
+				'OrganizationMembershipRole',
+				'OrganizationOwnerInvitation',
+				'OrganizationOwnerEnrollmentChallenge',
+				'OrganizationOwnerAcceptanceAuditEvent',
+				'OrganizationOwnerInvitationDelivery',
+				'OrganizationOwnershipAuditEvent',
+				'PasswordCredential',
+				'PlatformStaff',
+				'PlatformAdminSession',
+				'OwnerSession',
+				'PlatformTotpCredential',
+				'PlatformRecoveryCode',
+				'PlatformMfaChallenge',
+				'PlatformRole',
+				'PlatformPermission',
+				'PlatformStaffRole',
+				'PlatformRolePermission',
+				'OrganizationAuditEvent',
+				'PlatformAuthorizationAuditEvent',
+			].sort(),
+		);
+	});
 });
