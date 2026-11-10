@@ -18,7 +18,7 @@ export class OrganizationTestFixtures {
 	reserve(verifiedDatabase: VerifiedTestDatabase, slug?: string): OrganizationFixture {
 		assertTestDatabaseWasVerified(verifiedDatabase);
 		const id = randomUUID();
-		const record = { id, slug: slug ?? `gym-${id}` };
+		const record = { id, slug: slug ?? `org-${id}` };
 		return this.track(verifiedDatabase, record);
 	}
 
