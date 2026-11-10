@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { PrismaService } from '../../src/database/prisma.service.js';
 import {
-	assertTestDatabaseWasVerified,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	assertDevelopmentDatabaseWasVerified,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
 const TRANSACTION_MAX_WAIT_MILLISECONDS = 30_000;
 const TRANSACTION_TIMEOUT_MILLISECONDS = 60_000;
@@ -56,8 +56,11 @@ export class PlatformAdminTestFixtures {
 		return this.reserve(this.#platformPermissionIds);
 	}
 
-	async cleanup(prisma: PrismaService, verifiedDatabase: VerifiedTestDatabase): Promise<void> {
-		assertTestDatabaseWasVerified(verifiedDatabase);
+	async cleanup(
+		prisma: PrismaService,
+		verifiedDatabase: VerifiedDevelopmentDatabase,
+	): Promise<void> {
+		assertDevelopmentDatabaseWasVerified(verifiedDatabase);
 
 		const userIds = [...this.#userIds];
 		const passwordCredentialIds = [...this.#passwordCredentialIds];
