@@ -7,7 +7,10 @@ import { DatabaseModule } from '../../src/database/database.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { TenantTransactionService } from '../../src/database/tenant-transaction.service.js';
 import type { Prisma } from '../../src/generated/prisma/client.js';
-import { loadTestDatabaseSafetyConfig, verifyTestDatabaseSafety } from './test-database-safety.js';
+import {
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
+} from './development-database-safety.js';
 
 interface TenantSettings {
 	readonly organizationId: string | null;
@@ -73,7 +76,7 @@ async function readEveryPooledConnection(prisma: PrismaService): Promise<TenantS
 	return Promise.all([readConnection(), readConnection()]);
 }
 
-const testDatabaseSafety = loadTestDatabaseSafetyConfig();
+const developmentDatabase = loadDevelopmentDatabaseConfig();
 
 describe('database integration', () => {
 	let module: TestingModule;
@@ -84,7 +87,7 @@ describe('database integration', () => {
 		module = await Test.createTestingModule({
 			imports: [
 				DatabaseModule.forRoot({
-					databaseUrl: testDatabaseSafety.databaseUrl,
+					databaseUrl: developmentDatabase.databaseUrl,
 					poolMax: POOL_SIZE,
 					connectionTimeoutMilliseconds: 5_000,
 				}),
@@ -92,7 +95,7 @@ describe('database integration', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		await verifyTestDatabaseSafety(prisma, testDatabaseSafety);
+		await verifyDevelopmentDatabaseSafety(prisma, developmentDatabase);
 		tenantTransactions = module.get(TenantTransactionService);
 	});
 
@@ -100,7 +103,7 @@ describe('database integration', () => {
 		await module.close();
 	});
 
-	it('connects to an isolated PostgreSQL test database', async () => {
+	it('connects to the approved development PostgreSQL database', async () => {
 		await expect(prisma.$queryRaw`SELECT 1`).resolves.toEqual([{ '?column?': 1 }]);
 	});
 
