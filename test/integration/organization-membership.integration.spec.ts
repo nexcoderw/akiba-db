@@ -478,17 +478,13 @@ describe('organization ownership and membership foundation', () => {
 				},
 			}),
 		).rejects.toMatchObject({ code: 'P2002' });
-		await expect(
-			prisma.organizationRole.create({
-				data: {
-					id: authorization.reserveRoleId(requireVerified()),
-					organizationId,
-					key: 'custom.owner',
-					name: 'Organization Owner',
-					isSystem: false,
-				},
-			}),
-		).rejects.toThrow('organization_roles_system_identity_check');
+		const impersonatorId = authorization.reserveRoleId(requireVerified());
+		await expect(prisma.$executeRaw`
+			INSERT INTO public.organization_roles
+				(id, organization_id, key, name, is_system, updated_at)
+			VALUES (${impersonatorId}::uuid, ${organizationId}::uuid,
+				'custom.owner', 'Organization Owner', false, now())
+		`).rejects.toThrow('organization_roles_system_identity_check');
 	});
 
 	it('rejects a cross-organization permission mapping at the database boundary', async () => {
