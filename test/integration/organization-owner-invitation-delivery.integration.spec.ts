@@ -19,13 +19,13 @@ import { OrganizationOwnerInvitationTestFixtures } from './organization-owner-in
 import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
 	verifyTestTablePrivileges,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const transactionOptions = { maxWait: 10_000, timeout: 20_000 } as const;
 const requiredChecks = [
 	'organization_owner_invitation_deliveries_lifecycle_check',
@@ -41,7 +41,7 @@ jest.setTimeout(60_000);
 describe('organization owner invitation delivery foundation', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let organizations: OrganizationTestFixtures;
 	let identities: PlatformAdminTestFixtures;
 	let invitations: OrganizationOwnerInvitationTestFixtures;
@@ -60,7 +60,7 @@ describe('organization owner invitation delivery foundation', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const [table] = await prisma.$queryRaw<{ name: string | null }[]>`
 			SELECT to_regclass('public.organization_owner_invitation_deliveries')::text AS name
 		`;
@@ -114,7 +114,7 @@ describe('organization owner invitation delivery foundation', () => {
 		if (missing.length > 0) {
 			throw new Error(
 				`Owner invitation delivery prerequisites are missing: ${missing.join('; ')}. ` +
-					'Review and apply the Step 21 forward repair and disposable-test grants before ' +
+					'Review and apply the forward delivery repair on the approved development branch before ' +
 					'integration tests. Migration status alone does not prove these protections exist; ' +
 					'do not rewrite the foundation or bypass this preflight.',
 			);
@@ -150,9 +150,9 @@ describe('organization owner invitation delivery foundation', () => {
 		await module?.close();
 	});
 
-	function requireVerified(): VerifiedTestDatabase {
+	function requireVerified(): VerifiedDevelopmentDatabase {
 		if (verified === undefined)
-			throw new Error('Invitation delivery test database is not verified.');
+			throw new Error('Invitation delivery development database is not verified.');
 		return verified;
 	}
 
