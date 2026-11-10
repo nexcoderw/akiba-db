@@ -8,10 +8,10 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { PlatformStaffStatus } from '../../src/generated/prisma/client.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
 const UNKNOWN_STAFF_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TRANSACTION_MAX_WAIT_MILLISECONDS = 10_000;
@@ -36,12 +36,12 @@ async function expectConstraintViolation(
 	await expect(operation).rejects.toMatchObject({ code });
 }
 
-const testDatabaseSafety = loadTestDatabaseSafetyConfig();
+const developmentDatabase = loadDevelopmentDatabaseConfig();
 
 describe('platform authentication persistence', () => {
 	let module: TestingModule;
 	let prisma: PrismaService;
-	let verifiedDatabase: VerifiedTestDatabase | undefined;
+	let verifiedDatabase: VerifiedDevelopmentDatabase | undefined;
 	let fixtures = new PlatformAdminTestFixtures();
 	const additionalFixtures: PlatformAdminTestFixtures[] = [];
 
@@ -49,7 +49,7 @@ describe('platform authentication persistence', () => {
 		module = await Test.createTestingModule({
 			imports: [
 				DatabaseModule.forRoot({
-					databaseUrl: testDatabaseSafety.databaseUrl,
+					databaseUrl: developmentDatabase.databaseUrl,
 					poolMax: 2,
 					connectionTimeoutMilliseconds: 10_000,
 				}),
@@ -57,7 +57,7 @@ describe('platform authentication persistence', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		verifiedDatabase = await verifyTestDatabaseSafety(prisma, testDatabaseSafety);
+		verifiedDatabase = await verifyDevelopmentDatabaseSafety(prisma, developmentDatabase);
 	});
 
 	beforeEach(() => {
@@ -101,7 +101,7 @@ describe('platform authentication persistence', () => {
 		});
 	}
 
-	function requireVerifiedDatabase(): VerifiedTestDatabase {
+	function requireVerifiedDatabase(): VerifiedDevelopmentDatabase {
 		if (verifiedDatabase === undefined) {
 			throw new Error('The integration-test database safety check has not completed.');
 		}
