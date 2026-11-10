@@ -13,6 +13,18 @@ import { approvedTargets, neonEnvironment } from './neon-environment-fixtures.js
 type RawQuery = (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
 
 describe('development integration safety', () => {
+	it('accepts the guarded development target while production approval is pending', () => {
+		const targets = {
+			development: approvedTargets.development,
+			production: { ...approvedTargets.production, directHost: '' },
+		};
+		expect(loadDevelopmentDatabaseConfig(neonEnvironment(), targets)).toMatchObject({
+			databaseName: 'neondb',
+			databaseUser: 'neondb_owner',
+			coordinatorPid: 12345,
+		});
+	});
+
 	it('requires the guarded runner and rejects production before a connection opens', () => {
 		expect(() =>
 			loadDevelopmentDatabaseConfig(neonEnvironment('production'), approvedTargets),
