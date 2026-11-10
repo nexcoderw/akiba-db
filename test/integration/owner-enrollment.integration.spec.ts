@@ -20,13 +20,13 @@ import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import { OwnerEnrollmentTestFixtures } from './owner-enrollment-test-fixtures.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
 	verifyTestTablePrivileges,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const transactionOptions = { maxWait: 10_000, timeout: 20_000 } as const;
 const requiredChecks = [
 	'owner_enrollment_challenges_lifecycle_check',
@@ -46,7 +46,7 @@ jest.setTimeout(60_000);
 describe('owner enrollment proof and recipient acceptance audit foundation', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let organizations: OrganizationTestFixtures;
 	let identities: PlatformAdminTestFixtures;
 	let invitations: OrganizationOwnerInvitationTestFixtures;
@@ -66,7 +66,7 @@ describe('owner enrollment proof and recipient acceptance audit foundation', () 
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const safe = await verifyTestDatabaseSafety(prisma, safety);
+		const safe = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const tables = await prisma.$queryRaw<{ name: string; relation: string | null }[]>`
 			SELECT expected.name, to_regclass(expected.name)::text AS relation
 			FROM (VALUES
@@ -100,8 +100,8 @@ describe('owner enrollment proof and recipient acceptance audit foundation', () 
 		if (missing.length > 0) {
 			throw new Error(
 				`Owner enrollment prerequisites are missing: ${missing.join('; ')}. ` +
-					'Review the Step 19 foundation and forward hardening on the independently verified ' +
-					'disposable database. Migration status alone does not prove these protections exist; ' +
+					'Review the Step 19 foundation and forward hardening on the approved ' +
+					'development branch. Migration status alone does not prove these protections exist; ' +
 					'do not rewrite an applied foundation or bypass this preflight.',
 			);
 		}
@@ -150,7 +150,7 @@ describe('owner enrollment proof and recipient acceptance audit foundation', () 
 		await module?.close();
 	});
 
-	function safeDatabase(): VerifiedTestDatabase {
+	function safeDatabase(): VerifiedDevelopmentDatabase {
 		if (verified === undefined) throw new Error('Enrollment fixture database is not verified.');
 		return verified;
 	}
@@ -532,7 +532,7 @@ describe('owner enrollment proof and recipient acceptance audit foundation', () 
 		const original = await prisma.organizationOwnerAcceptanceAuditEvent.findUniqueOrThrow({
 			where: { id: result.auditId },
 		});
-		// The restricted disposable test role may remove only this tracked audit fixture.
+		// Development cleanup may remove only this tracked synthetic audit fixture.
 		await prisma.organizationOwnerAcceptanceAuditEvent.delete({ where: { id: result.auditId } });
 		for (const changes of [
 			{ actorUserId: second.userId },
