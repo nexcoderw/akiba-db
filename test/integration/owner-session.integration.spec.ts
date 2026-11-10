@@ -111,7 +111,7 @@ describe('owner session persistence', () => {
 			data: {
 				id,
 				email: `owner-session-${id}@example.com`,
-				displayName: 'Fictional Gym Owner',
+				displayName: 'Fictional Organization Owner',
 				status,
 				emailVerifiedAt: status === UserStatus.ACTIVE ? await databaseNow() : null,
 			},
