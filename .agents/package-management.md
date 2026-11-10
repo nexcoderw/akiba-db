@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-Publish a stable private package that `gym-api` can consume without source coupling.
+Publish a stable private package that `akiba-api` can consume without source coupling.
 
 ## Mandatory engineering requirements
 
@@ -18,7 +18,7 @@ imports, or consumer postinstall generation from this repository.
 
 ## Correct example
 
-After human verification, publish `0.2.0`; `gym-api` installs exactly `@nexcoderw/gym-db@0.2.0`.
+After human verification, publish `0.2.0`; `akiba-api` installs exactly `@nexcoderw/akiba-db@0.2.0`.
 
 ## Common mistakes
 
