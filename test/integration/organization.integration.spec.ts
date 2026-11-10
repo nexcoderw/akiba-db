@@ -9,12 +9,12 @@ import {
 	type OrganizationFixture,
 } from './organization-test-fixtures.js';
 import {
-	loadTestDatabaseSafetyConfig,
-	verifyTestDatabaseSafety,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	loadDevelopmentDatabaseConfig,
+	verifyDevelopmentDatabaseSafety,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
-const safety = loadTestDatabaseSafetyConfig();
+const safety = loadDevelopmentDatabaseConfig();
 const transactionOptions = { maxWait: 10_000, timeout: 15_000 };
 const RESERVED_SLUGS = [
 	'admin',
@@ -55,7 +55,7 @@ jest.setTimeout(30_000);
 describe('organization database foundation', () => {
 	let module: TestingModule | undefined;
 	let prisma: PrismaService;
-	let verified: VerifiedTestDatabase | undefined;
+	let verified: VerifiedDevelopmentDatabase | undefined;
 	let fixtures: OrganizationTestFixtures;
 	const extraFixtures: OrganizationTestFixtures[] = [];
 
@@ -71,7 +71,7 @@ describe('organization database foundation', () => {
 		}).compile();
 		await module.init();
 		prisma = module.get(PrismaService);
-		const verifiedDatabase = await verifyTestDatabaseSafety(prisma, safety);
+		const verifiedDatabase = await verifyDevelopmentDatabaseSafety(prisma, safety);
 		const readiness = await prisma.$queryRaw<{ table_exists: boolean; validated_checks: number }[]>`
 			SELECT to_regclass('public.organizations') IS NOT NULL AS table_exists,
 				(SELECT count(*)::integer FROM pg_catalog.pg_constraint
@@ -121,8 +121,9 @@ describe('organization database foundation', () => {
 		await module?.close();
 	});
 
-	function requireVerified(): VerifiedTestDatabase {
-		if (verified === undefined) throw new Error('Organization test database is not verified.');
+	function requireVerified(): VerifiedDevelopmentDatabase {
+		if (verified === undefined)
+			throw new Error('Organization development database is not verified.');
 		return verified;
 	}
 
