@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { PrismaService } from '../../src/database/prisma.service.js';
 import {
-	assertTestDatabaseWasVerified,
-	type VerifiedTestDatabase,
-} from './test-database-safety.js';
+	assertDevelopmentDatabaseWasVerified,
+	type VerifiedDevelopmentDatabase,
+} from './development-database-safety.js';
 
 interface OrganizationAuditFixture {
 	readonly id: string;
@@ -36,28 +36,28 @@ async function waitBeforeRetry(attempt: number): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, attempt * 250));
 }
 
-/** Audit cleanup is separately granted ONLY in the independently marked disposable database. */
+/** Cleanup targets only reserved synthetic audit records in the verified development maintenance window. */
 export class AuditTestFixtures {
 	readonly #organizationEvents: OrganizationAuditFixture[] = [];
 	readonly #authorizationEvents: AuthorizationAuditFixture[] = [];
 
 	reserveOrganizationEvent(
-		verified: VerifiedTestDatabase,
+		verified: VerifiedDevelopmentDatabase,
 		organizationId: string,
 		actorPlatformStaffId: string,
 	): OrganizationAuditFixture {
-		assertTestDatabaseWasVerified(verified);
+		assertDevelopmentDatabaseWasVerified(verified);
 		const fixture = { id: randomUUID(), organizationId, actorPlatformStaffId };
 		this.#organizationEvents.push(fixture);
 		return fixture;
 	}
 
 	reserveAuthorizationEvent(
-		verified: VerifiedTestDatabase,
+		verified: VerifiedDevelopmentDatabase,
 		targetPlatformStaffId: string,
 		targetPlatformRoleId: string,
 	): AuthorizationAuditFixture {
-		assertTestDatabaseWasVerified(verified);
+		assertDevelopmentDatabaseWasVerified(verified);
 		const fixture = {
 			id: randomUUID(),
 			targetPlatformStaffId,
@@ -68,8 +68,8 @@ export class AuditTestFixtures {
 		return fixture;
 	}
 
-	async cleanup(prisma: PrismaService, verified: VerifiedTestDatabase): Promise<void> {
-		assertTestDatabaseWasVerified(verified);
+	async cleanup(prisma: PrismaService, verified: VerifiedDevelopmentDatabase): Promise<void> {
+		assertDevelopmentDatabaseWasVerified(verified);
 		for (let attempt = 1; attempt <= CLEANUP_TRANSACTION_ATTEMPTS; attempt += 1) {
 			try {
 				await prisma.$transaction(async (transaction) => {
