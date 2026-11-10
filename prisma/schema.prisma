@@ -12,6 +12,7 @@ enum UserStatus {
   PENDING   @map("pending")
   ACTIVE    @map("active")
   SUSPENDED @map("suspended")
+  DISABLED  @map("disabled")
 
   @@map("user_status")
 }
@@ -151,19 +152,23 @@ model Organization {
 /// Global login identity. An account has no platform privileges without an active PlatformStaff
 /// record and permissions obtained through explicit role assignments.
 model User {
-  id                         String                                  @id @default(uuid()) @db.Uuid
-  email                      String                                  @unique(map: "users_email_key") @db.Citext
-  displayName                String                                  @map("display_name") @db.VarChar(160)
-  status                     UserStatus                              @default(PENDING)
-  emailVerifiedAt            DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
-  createdAt                  DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  passwordCredential         PasswordCredential?
-  platformStaff              PlatformStaff?
-  organizationMemberships    OrganizationMembership[]
-  ownerEnrollmentChallenges  OrganizationOwnerEnrollmentChallenge[]
-  ownerAcceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
-  ownerSessions              OwnerSession[]
+  id                          String                                  @id @default(uuid()) @db.Uuid
+  email                       String                                  @unique(map: "users_email_key") @db.Citext
+  displayName                 String                                  @map("display_name") @db.VarChar(160)
+  status                      UserStatus                              @default(PENDING)
+  emailVerifiedAt             DateTime?                               @map("email_verified_at") @db.Timestamptz(6)
+  identityVersion             Int                                     @default(1) @map("identity_version")
+  createdAt                   DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordCredential          PasswordCredential?
+  platformStaff               PlatformStaff?
+  organizationMemberships     OrganizationMembership[]
+  ownerEnrollmentChallenges   OrganizationOwnerEnrollmentChallenge[]
+  ownerAcceptanceAuditEvents  OrganizationOwnerAcceptanceAuditEvent[]
+  ownerSessions               OwnerSession[]
+  emailVerificationChallenges UserEmailVerificationChallenge[]
+  identitySecurityEvents      IdentitySecurityAuditEvent[]            @relation("identity_audit_subject")
+  identitySecurityActions     IdentitySecurityAuditEvent[]            @relation("identity_audit_actor")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -396,15 +401,57 @@ model OrganizationOwnershipAuditEvent {
 /// Password material is deliberately separated from public identity data. Values must be hashes
 /// produced by an approved application-layer password hashing algorithm, never plaintext.
 model PasswordCredential {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @unique(map: "password_credentials_user_id_key") @map("user_id") @db.Uuid
-  passwordHash      String   @map("password_hash") @db.VarChar(255)
-  passwordChangedAt DateTime @default(now()) @map("password_changed_at") @db.Timestamptz(6)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique(map: "password_credentials_user_id_key") @map("user_id") @db.Uuid
+  passwordHash      String    @map("password_hash") @db.VarChar(255)
+  passwordChangedAt DateTime  @default(now()) @map("password_changed_at") @db.Timestamptz(6)
+  version           Int       @default(1)
+  normalization     String    @default("raw") @db.VarChar(8)
+  disabledAt        DateTime? @map("disabled_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("password_credentials")
+}
+
+/// Future mailbox proof transport is API-owned. Only a digest is persisted; a proof is bound to
+/// the current identity version and consumed atomically with the verified identity change.
+model UserEmailVerificationChallenge {
+  id              String    @id(map: "user_email_verification_challenges_pkey") @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  identityVersion Int       @map("identity_version")
+  targetEmail     String    @map("target_email") @db.Citext
+  tokenDigest     String    @unique(map: "user_email_verification_challenges_digest_key") @map("token_digest") @db.VarChar(64)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt      DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "user_email_verification_challenges_user_fkey")
+
+  @@index([userId, consumedAt, expiresAt], map: "user_email_verification_challenges_user_active_idx")
+  @@map("user_email_verification_challenges")
+}
+
+/// Append-only security facts. No passwords, hashes, addresses, tokens or arbitrary metadata.
+/// Actor relationships and SQL checks distinguish authorized platform operations from self proof.
+model IdentitySecurityAuditEvent {
+  id                   String         @id(map: "identity_security_audit_events_pkey") @default(uuid()) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  actorPlatformStaffId String?        @map("actor_platform_staff_id") @db.Uuid
+  actorUserId          String?        @map("actor_user_id") @db.Uuid
+  actorKind            String         @map("actor_kind") @db.VarChar(24)
+  action               String         @db.VarChar(48)
+  identityVersion      Int            @map("identity_version")
+  credentialVersion    Int?           @map("credential_version")
+  requestId            String         @map("request_id") @db.VarChar(80)
+  occurredAt           DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  user                 User           @relation("identity_audit_subject", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "identity_security_audit_events_user_fkey")
+  actorUser            User?          @relation("identity_audit_actor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "identity_security_audit_events_actor_user_fkey")
+  actorPlatformStaff   PlatformStaff? @relation(fields: [actorPlatformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "identity_security_audit_events_actor_staff_fkey")
+
+  @@index([userId, occurredAt(sort: Desc), id], map: "identity_security_audit_events_user_time_idx")
+  @@index([requestId], map: "identity_security_audit_events_request_idx")
+  @@map("identity_security_audit_events")
 }
 
 /// Explicit eligibility for Akiba platform administration. Active status alone grants nothing;
@@ -427,6 +474,7 @@ model PlatformStaff {
   ownerInvitationsCreated            OrganizationOwnerInvitation[]
   ownerInvitationDeliveriesRequested OrganizationOwnerInvitationDelivery[]
   ownershipAuditEvents               OrganizationOwnershipAuditEvent[]
+  identitySecurityActions            IdentitySecurityAuditEvent[]
 
   @@index([status], map: "platform_staff_status_idx")
   @@map("platform_staff")
