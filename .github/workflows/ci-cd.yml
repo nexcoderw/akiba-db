@@ -1,4 +1,4 @@
-name: CI and production deployment
+name: Verify Akiba Database
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gym-db-${{ github.ref }}
+  group: akiba-db-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/gym_ci
+      # CLI configuration only; these checks never connect to a database.
+      DATABASE_URL: postgresql://localhost:5432/akiba_ci
+      NODE_ENV: production
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -28,15 +30,16 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.20.2
+          node-version: 22
           cache: npm
 
       - name: Install locked dependencies
         run: npm ci --include=dev
 
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
       - name: Generate Prisma client
-        env:
-          NODE_ENV: production
         run: npm run prisma:generate
 
       - name: Check formatting
@@ -54,50 +57,5 @@ jobs:
       - name: Build package
         run: npm run build
 
-  deploy:
-    name: Deploy database package
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: verify
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    environment:
-      name: production
-    env:
-      SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
-      SSH_PORT: ${{ vars.PRODUCTION_SSH_PORT || '22' }}
-      SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
-      SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-      SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
-    steps:
-      - name: Check out deployment script
-        uses: actions/checkout@v4
-
-      - name: Configure production SSH
-        run: |
-          set -euo pipefail
-          : "${SSH_HOST:?Missing PRODUCTION_SSH_HOST environment variable}"
-          : "${SSH_USER:?Missing PRODUCTION_SSH_USER environment variable}"
-          : "${SSH_PRIVATE_KEY:?Missing PRODUCTION_SSH_PRIVATE_KEY secret}"
-          : "${SSH_KNOWN_HOSTS:?Missing PRODUCTION_SSH_KNOWN_HOSTS secret}"
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
-          chmod 600 "$HOME/.ssh/deploy_key"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-
-      - name: Deploy exact database commit
-        run: |
-          set -euo pipefail
-          ssh \
-            -i "$HOME/.ssh/deploy_key" \
-            -p "$SSH_PORT" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$SSH_USER@$SSH_HOST" \
-            "bash -s -- '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'" \
-            < scripts/deploy-production.sh
-
-      - name: Remove ephemeral SSH material
-        if: always()
-        run: rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+      - name: Check compiled exports
+        run: node --input-type=module -e "await import('./dist/index.js')"
