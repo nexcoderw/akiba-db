@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-import { loadNeonEnvironment } from './neon-environment.mjs';
+import { loadNeonEnvironment, neonCommandErrorMessage } from './neon-environment.mjs';
 
 /** @param {unknown} value @returns {Record<string, unknown>} */
 function record(value) {
@@ -14,8 +14,11 @@ function record(value) {
 async function audit() {
 	if (process.argv.length !== 2) throw new Error('This audit accepts no additional arguments.');
 	const config = loadNeonEnvironment('development');
-	const client = new pg.Client({ connectionString: config.directDatabaseUrl,
-		connectionTimeoutMillis: 10000, query_timeout: 10000 });
+	const client = new pg.Client({
+		connectionString: config.directDatabaseUrl,
+		connectionTimeoutMillis: 10000,
+		query_timeout: 10000,
+	});
 	try {
 		await client.connect();
 		await client.query('BEGIN READ ONLY');
@@ -27,8 +30,11 @@ async function audit() {
 			 AND pg_has_role(current_user, n.oid, 'MEMBER')) AS neon_superuser_member
 			FROM pg_roles r WHERE r.rolname = current_user`);
 		const connected = record(identity.rows[0]);
-		if (connected.database !== config.databaseName ||
-			connected.current_user !== config.databaseUser || connected.session_user !== config.databaseUser) {
+		if (
+			connected.database !== config.databaseName ||
+			connected.current_user !== config.databaseUser ||
+			connected.session_user !== config.databaseUser
+		) {
 			throw new Error('The connected identity does not match the approved development target.');
 		}
 		const roles = await client.query(`SELECT r.rolname, r.rolsuper, r.rolbypassrls,
@@ -48,13 +54,31 @@ async function audit() {
 			permissive, roles, cmd, qual, with_check FROM pg_policies
 			WHERE schemaname = 'public' ORDER BY tablename, policyname`);
 		const tableRows = tables.rows.map(record);
-		const scoped = tableRows.filter((table) => typeof table.table_name === 'string' &&
-			(table.table_name === 'organizations' || table.table_name.startsWith('organization_')));
-		const blocked = connected.rolsuper !== false || connected.rolbypassrls !== false || connected.neon_superuser_member !== false ||
-			scoped.length === 0 || scoped.some((table) => table.rls_active_for_current_user !== true);
-		console.log(JSON.stringify({ environment: 'development', identity: connected,
-			roles: roles.rows.map(record), tables: tableRows, policies: policies.rows.map(record),
-			databaseEnforcedIsolation: blocked ? 'BLOCKED' : 'REQUIRES_POLICY_REVIEW' }, null, 2));
+		const scoped = tableRows.filter(
+			(table) =>
+				typeof table.table_name === 'string' &&
+				(table.table_name === 'organizations' || table.table_name.startsWith('organization_')),
+		);
+		const blocked =
+			connected.rolsuper !== false ||
+			connected.rolbypassrls !== false ||
+			connected.neon_superuser_member !== false ||
+			scoped.length === 0 ||
+			scoped.some((table) => table.rls_active_for_current_user !== true);
+		console.log(
+			JSON.stringify(
+				{
+					environment: 'development',
+					identity: connected,
+					roles: roles.rows.map(record),
+					tables: tableRows,
+					policies: policies.rows.map(record),
+					databaseEnforcedIsolation: blocked ? 'BLOCKED' : 'REQUIRES_POLICY_REVIEW',
+				},
+				null,
+				2,
+			),
+		);
 		if (blocked) process.exitCode = 2;
 	} finally {
 		await client.query('ROLLBACK').catch(() => undefined);
@@ -62,7 +86,10 @@ async function audit() {
 	}
 }
 
-void audit().catch(() => {
-	console.error('Tenant security audit failed. Check approved development access and configuration.');
+/** @param {unknown} error */
+function reportAuditFailure(error) {
+	console.error(`Tenant security audit failed. ${neonCommandErrorMessage(error)}`);
 	process.exitCode = 1;
-});
+}
+
+void audit().catch(reportAuditFailure);
