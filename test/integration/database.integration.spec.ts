@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { jest } from '@jest/globals';
 import { Test, type TestingModule } from '@nestjs/testing';
 
@@ -100,6 +102,23 @@ describe('database integration', () => {
 
 	it('connects to an isolated PostgreSQL test database', async () => {
 		await expect(prisma.$queryRaw`SELECT 1`).resolves.toEqual([{ '?column?': 1 }]);
+	});
+
+	it('replays migrations to exactly the retained foundation tables', async () => {
+		const schema = await readFile(new URL('../../prisma/schema.prisma', import.meta.url), 'utf8');
+		const expectedTables = [...schema.matchAll(/^model \w+ \{([\s\S]*?)^\}/gmu)].map((match) => {
+			const table = /@@map\("([^"]+)"\)/u.exec(match[1] ?? '')?.[1];
+			if (table === undefined) throw new Error('Every foundation model must map its table name.');
+			return table;
+		});
+		const tables = await prisma.$queryRaw<{ table_name: string }[]>`
+			SELECT table_name FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+				AND table_name <> '_prisma_migrations'
+			ORDER BY table_name
+		`;
+		expect(expectedTables).toHaveLength(23);
+		expect(tables.map(({ table_name }) => table_name)).toEqual(expectedTables.sort());
 	});
 
 	it('makes organization context available inside its transaction', async () => {
