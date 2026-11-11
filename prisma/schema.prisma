@@ -195,6 +195,7 @@ model OrganizationMembership {
   authorizationEventsAsActor  OrganizationAuthorizationAuditEvent[]   @relation("organization_authorization_actor")
   authorizationEventsAsTarget OrganizationAuthorizationAuditEvent[]   @relation("organization_authorization_target_membership")
   ownerAcceptanceAuditEvents  OrganizationOwnerAcceptanceAuditEvent[]
+  sessions                    OwnerSession[]
 
   @@unique([organizationId, userId], map: "organization_memberships_organization_user_key")
   @@unique([organizationId, id], map: "organization_memberships_organization_id_key")
@@ -350,8 +351,10 @@ model OrganizationOwnerEnrollmentChallenge {
   ownerInvitation       OrganizationOwnerInvitation             @relation(fields: [organizationId, ownerInvitationId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_invitation_fkey")
   user                  User?                                   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_user_fkey")
   acceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
+  provisionalSessions   OwnerSession[]
 
   @@unique([organizationId, id, ownerInvitationId, userId], map: "owner_enrollment_challenges_proof_identity_key")
+  @@unique([organizationId, id, userId], map: "owner_enrollment_challenges_org_id_user_key")
   @@index([organizationId, ownerInvitationId, status, expiresAt, id], map: "owner_enrollment_challenges_org_invitation_status_idx")
   @@index([organizationId, userId, createdAt(sort: Desc), id], map: "owner_enrollment_challenges_org_user_created_idx")
   @@index([expiresAt, id], map: "owner_enrollment_challenges_expiry_idx")
@@ -539,16 +542,17 @@ model PlatformStaff {
 /// Server-side Akiba administration session. Only a digest of the high-entropy token is stored,
 /// and the required MFA timestamp prevents this record from representing a pre-MFA login state.
 model PlatformAdminSession {
-  id              String        @id @default(uuid()) @db.Uuid
-  platformStaffId String        @map("platform_staff_id") @db.Uuid
-  tokenDigest     String        @unique(map: "platform_admin_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(6)
-  idleExpiresAt   DateTime      @map("idle_expires_at") @db.Timestamptz(6)
-  lastSeenAt      DateTime      @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  mfaVerifiedAt   DateTime      @map("mfa_verified_at") @db.Timestamptz(6)
-  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(6)
-  platformStaff   PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id               String        @id @default(uuid()) @db.Uuid
+  platformStaffId  String        @map("platform_staff_id") @db.Uuid
+  tokenDigest      String        @unique(map: "platform_admin_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
+  idleExpiresAt    DateTime      @map("idle_expires_at") @db.Timestamptz(6)
+  lastSeenAt       DateTime      @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  mfaVerifiedAt    DateTime      @map("mfa_verified_at") @db.Timestamptz(6)
+  revokedAt        DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  revocationReason String?       @map("revocation_reason") @db.VarChar(40)
+  platformStaff    PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([platformStaffId, revokedAt, expiresAt], map: "platform_admin_sessions_staff_active_idx")
   @@index([expiresAt], map: "platform_admin_sessions_expires_at_idx")
@@ -556,26 +560,32 @@ model PlatformAdminSession {
   @@map("platform_admin_sessions")
 }
 
-/// Server-side session for the Organization Portal. It belongs to a global User rather than an
-/// Organization because tenant access is authorized from live membership, role and Organization
-/// state on every request. Only a purpose-separated digest of the opaque cookie token is persisted.
+/// An organization session is bound to the membership selected during authentication.
+/// Legacy unbound rows are revoked by the forward migration and cannot authenticate.
 model OwnerSession {
-  id                String                @id(map: "owner_sessions_pkey") @default(uuid()) @db.Uuid
-  userId            String                @map("user_id") @db.Uuid
-  tokenDigest       String                @unique(map: "owner_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
-  assurance         OwnerSessionAssurance @default(AAL1)
-  authenticatedAt   DateTime              @map("authenticated_at") @db.Timestamptz(6)
-  mfaVerifiedAt     DateTime?             @map("mfa_verified_at") @db.Timestamptz(6)
-  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  lastActivityAt    DateTime              @default(now()) @map("last_activity_at") @db.Timestamptz(6)
-  idleExpiresAt     DateTime              @map("idle_expires_at") @db.Timestamptz(6)
-  absoluteExpiresAt DateTime              @map("absolute_expires_at") @db.Timestamptz(6)
-  revokedAt         DateTime?             @map("revoked_at") @db.Timestamptz(6)
-  user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_sessions_user_id_fkey")
+  id                    String                                @id(map: "owner_sessions_pkey") @default(uuid()) @db.Uuid
+  userId                String                                @map("user_id") @db.Uuid
+  organizationId        String?                               @map("organization_id") @db.Uuid
+  membershipId          String?                               @map("membership_id") @db.Uuid
+  enrollmentChallengeId String?                               @map("enrollment_challenge_id") @db.Uuid
+  tokenDigest           String                                @unique(map: "owner_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
+  assurance             OwnerSessionAssurance                 @default(AAL1)
+  authenticatedAt       DateTime                              @map("authenticated_at") @db.Timestamptz(6)
+  mfaVerifiedAt         DateTime?                             @map("mfa_verified_at") @db.Timestamptz(6)
+  createdAt             DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActivityAt        DateTime                              @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  idleExpiresAt         DateTime                              @map("idle_expires_at") @db.Timestamptz(6)
+  absoluteExpiresAt     DateTime                              @map("absolute_expires_at") @db.Timestamptz(6)
+  revokedAt             DateTime?                             @map("revoked_at") @db.Timestamptz(6)
+  revocationReason      String?                               @map("revocation_reason") @db.VarChar(40)
+  user                  User                                  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_sessions_user_id_fkey")
+  membership            OrganizationMembership?               @relation(fields: [organizationId, membershipId, userId], references: [organizationId, id, userId], onDelete: Restrict, onUpdate: Restrict, map: "owner_sessions_membership_fkey")
+  enrollmentChallenge   OrganizationOwnerEnrollmentChallenge? @relation(fields: [organizationId, enrollmentChallengeId, userId], references: [organizationId, id, userId], onDelete: Restrict, onUpdate: Restrict, map: "owner_sessions_enrollment_challenge_fkey")
 
   @@index([userId, revokedAt, idleExpiresAt, absoluteExpiresAt], map: "owner_sessions_user_active_idx")
   @@index([idleExpiresAt], map: "owner_sessions_idle_expiry_idx")
   @@index([absoluteExpiresAt], map: "owner_sessions_absolute_expiry_idx")
+  @@index([organizationId, membershipId, revokedAt], map: "owner_sessions_membership_active_idx")
   @@map("owner_sessions")
 }
 
