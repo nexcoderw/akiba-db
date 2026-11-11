@@ -25,6 +25,8 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 	let verified: VerifiedDevelopmentDatabase | undefined;
 	let fixtures: PlatformAdminTestFixtures;
 	const sessionIds = new Set<string>();
+	const membershipIds = new Set<string>();
+	const organizationIds = new Set<string>();
 	beforeAll(async () => {
 		module = await Test.createTestingModule({
 			imports: [
@@ -43,11 +45,17 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 		assertDevelopmentDatabaseWasVerified(verified);
 		fixtures = new PlatformAdminTestFixtures();
 		sessionIds.clear();
+		membershipIds.clear();
+		organizationIds.clear();
 	});
 	afterEach(async () => {
 		if (verified === undefined) return;
 		if (sessionIds.size > 0)
 			await prisma.ownerSession.deleteMany({ where: { id: { in: [...sessionIds] } } });
+		if (membershipIds.size > 0)
+			await prisma.organizationMembership.deleteMany({ where: { id: { in: [...membershipIds] } } });
+		if (organizationIds.size > 0)
+			await prisma.organization.deleteMany({ where: { id: { in: [...organizationIds] } } });
 		await fixtures.cleanup(prisma, verified);
 	});
 	afterAll(async () => {
@@ -157,6 +165,20 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 		});
 		const tokenDigest = randomBytes(32).toString('hex');
 		const sessionId = randomUUID();
+		const organizationId = randomUUID();
+		const membershipId = randomUUID();
+		organizationIds.add(organizationId);
+		membershipIds.add(membershipId);
+		await prisma.organization.create({
+			data: {
+				id: organizationId,
+				slug: `session-${organizationId}`,
+				name: 'Fictional Session Organization',
+			},
+		});
+		await prisma.organizationMembership.create({
+			data: { id: membershipId, organizationId, userId: identity.id },
+		});
 		sessionIds.add(sessionId);
 		const [clock] = await prisma.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AS now`;
 		if (clock === undefined) throw new Error('Database clock is unavailable.');
@@ -165,6 +187,8 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 			data: {
 				id: sessionId,
 				userId: identity.id,
+				organizationId,
+				membershipId,
 				tokenDigest,
 				authenticatedAt: now,
 				createdAt: now,
@@ -173,6 +197,22 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 				absoluteExpiresAt: new Date(now.getTime() + 120_000),
 			},
 		});
+		await expect(
+			prisma.ownerSession.create({
+				data: {
+					id: randomUUID(),
+					userId: identity.id,
+					organizationId: randomUUID(),
+					membershipId,
+					tokenDigest: randomBytes(32).toString('hex'),
+					authenticatedAt: now,
+					createdAt: now,
+					lastActivityAt: now,
+					idleExpiresAt: new Date(now.getTime() + 60_000),
+					absoluteExpiresAt: new Date(now.getTime() + 120_000),
+				},
+			}),
+		).rejects.toMatchObject({ code: 'P2003' });
 		await expect(
 			prisma.$transaction(async (transaction) => {
 				await transaction.user.update({
