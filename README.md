@@ -35,6 +35,16 @@ these schema constraints do not themselves authorize a request. Review case-inse
 role names and legacy reserved identifiers before applying this migration; conflicts make deployment
 fail safely.
 
+The Step 5 forward migration binds every new active owner session to either one
+organization membership or one enrollment challenge. The API validates active membership or
+verified challenge state at issuance and on every request. Composite foreign keys tie the
+selected organization, membership/proof and global user together. It revokes legacy unbound
+sessions and adds an index for membership-scoped revocation. Existing browsers must sign in
+again after deployment. Review the migration SQL and current development drift before deploy;
+apply it in a maintenance window, then regenerate the client and build this package before
+building the API. The migration never provisions a database or role. If deployment fails,
+retain the current applied history and prepare a reviewed forward repair; do not reset Neon.
+
 ## Technology and layout
 
 Use npm 10+ and Node.js `^20.19.0 || ^22.12.0 || >=24.0.0` (CI uses Node 22). Actual dependencies are
