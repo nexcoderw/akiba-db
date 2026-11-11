@@ -46,6 +46,7 @@ describe('Prisma schema contract', () => {
 
 		expect(session).toMatch(/tokenDigest\s+String\s+@unique/u);
 		expect(session).toMatch(/mfaVerifiedAt\s+DateTime\s+@map/u);
+		expect(session).toContain('revocationReason');
 		expect(totp).toMatch(/platformStaffId\s+String\s+@unique/u);
 		expect(totp).toMatch(/encryptedSecret\s+Bytes/u);
 		expect(totp).toContain('lastAcceptedTimeStep BigInt?');
@@ -59,7 +60,7 @@ describe('Prisma schema contract', () => {
 		expect(schema).not.toMatch(/^\s+(?:token|secret|recoveryCode)\s+/mu);
 	});
 
-	it('keeps owner sessions separate, opaque and globally scoped', async () => {
+	it('keeps owner sessions separate, opaque and membership or proof bound', async () => {
 		const schemaUrl = new URL('../../prisma/schema.prisma', import.meta.url);
 		const schema = await readFile(schemaUrl, 'utf8');
 		const session = /model OwnerSession \{[\s\S]*?\n\}/u.exec(schema)?.[0];
@@ -76,7 +77,10 @@ describe('Prisma schema contract', () => {
 		expect(session).toContain('revokedAt');
 		expect(session).toContain('onDelete: Restrict, onUpdate: Restrict');
 		expect(session).not.toContain('platformStaffId');
-		expect(session).not.toContain('organizationId');
+		expect(session).toContain('organizationId');
+		expect(session).toContain('membershipId');
+		expect(session).toContain('enrollmentChallengeId');
+		expect(session).toContain('revocationReason');
 		expect(session).not.toMatch(/^\s+token\s+/mu);
 		expect(schema).toMatch(/ownerSessions\s+OwnerSession\[\]/u);
 	});
