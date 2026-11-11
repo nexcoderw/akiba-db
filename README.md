@@ -376,3 +376,20 @@ AKIBA_DB_SOURCE_REVISION to the reviewed DB commit; CI requires a full immutable
 silently selecting an old schema or main. No dependency version, generated client or lockfile is
 hand-authored. Live migrations, owner privilege diagnostics, RLS and integration tests were not run by
 the agent. Database-enforced tenant isolation remains BLOCKED under the current no-RLS owner policy.
+
+## Platform authentication auditing
+
+The forward `20261111180000_platform_authentication_audit` migration expands the existing
+`IdentitySecurityAuditEvent` CHECK constraints for primary authentication, rejected MFA, session
+issuance, session revocation and pending-challenge revocation. Authentication actors must match the
+subject user; enrollment and administrator actors cannot label their events as authentication facts.
+Existing restrictive foreign keys and append-only triggers remain in force. No table, Prisma field,
+credential, database or PostgreSQL role is added.
+
+Review development migration status and drift before deploying the SQL in a maintenance window.
+The CHECK expansion requires a table lock; timeout rolls the DDL transaction back. Deploy this
+migration before the API authentication changes: a missing audit contract makes those API
+transactions fail closed. The Prisma schema and public package types remain compatible with 0.2.0
+through the approved local dependency; update the API CI database revision after reviewing the DB
+commits. The added integration cases exercise real constraints with synthetic records and roll
+their audit writes back. They have not been executed by the agent.
