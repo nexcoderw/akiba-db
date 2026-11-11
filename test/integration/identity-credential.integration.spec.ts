@@ -275,4 +275,51 @@ describe('identity and credential PostgreSQL integrity (guarded development)', (
 			0,
 		);
 	});
+
+	it.each([
+		'platform_primary_authenticated',
+		'platform_mfa_rejected',
+		'platform_session_issued',
+		'platform_session_revoked',
+		'platform_challenge_revoked',
+	])(
+		'accepts an identity-bound authentication audit and retains immutability: %s',
+		async (action) => {
+			const identity = await user();
+			await expect(
+				prisma.$transaction(async (transaction) => {
+					const event = await transaction.identitySecurityAuditEvent.create({
+						data: {
+							userId: identity.id,
+							actorUserId: identity.id,
+							actorKind: 'authentication',
+							action,
+							identityVersion: identity.identityVersion,
+							requestId: `req_${randomUUID()}`,
+						},
+					});
+					await transaction.identitySecurityAuditEvent.delete({ where: { id: event.id } });
+				}, OPTIONS),
+			).rejects.toThrow(/Identity security audit events are immutable/u);
+			expect(
+				await prisma.identitySecurityAuditEvent.count({ where: { userId: identity.id } }),
+			).toBe(0);
+		},
+	);
+
+	it('rejects authentication events attributed to an enrollment actor', async () => {
+		const identity = await user();
+		await expect(
+			prisma.identitySecurityAuditEvent.create({
+				data: {
+					userId: identity.id,
+					actorUserId: identity.id,
+					actorKind: 'enrollment',
+					action: 'platform_session_issued',
+					identityVersion: identity.identityVersion,
+					requestId: `req_${randomUUID()}`,
+				},
+			}),
+		).rejects.toThrow(/identity_security_audit_events_authentication_check/u);
+	});
 });
