@@ -7,6 +7,8 @@ import { DatabaseModule } from '../../src/database/database.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { UserStatus } from '../../src/index.js';
 import { PlatformAdminTestFixtures } from './platform-admin-test-fixtures.js';
+import { OrganizationMembershipTestFixtures } from './organization-membership-test-fixtures.js';
+import { OrganizationTestFixtures } from './organization-test-fixtures.js';
 import {
 	loadDevelopmentDatabaseConfig,
 	verifyDevelopmentDatabaseSafety,
@@ -19,6 +21,7 @@ const requiredChecks = [
 	'owner_sessions_token_digest_check',
 	'owner_sessions_assurance_check',
 	'owner_sessions_timestamp_order_check',
+	'owner_sessions_binding_check',
 ];
 
 jest.setTimeout(60_000);
@@ -28,6 +31,8 @@ describe('owner session persistence', () => {
 	let prisma: PrismaService;
 	let verified: VerifiedDevelopmentDatabase | undefined;
 	let identities: PlatformAdminTestFixtures;
+	let organizations: OrganizationTestFixtures;
+	let memberships: OrganizationMembershipTestFixtures;
 	const sessionIds = new Set<string>();
 
 	beforeAll(async () => {
@@ -69,7 +74,7 @@ describe('owner session persistence', () => {
 			!triggers.some(({ name }) => name === 'owner_session_guard')
 		) {
 			throw new Error(
-				'Owner session prerequisites are missing. Apply the reviewed add_owner_sessions ' +
+				'Owner session prerequisites are missing. Apply the reviewed session ' +
 					'migration to the approved development branch before this suite.',
 			);
 		}
@@ -84,6 +89,8 @@ describe('owner session persistence', () => {
 
 	beforeEach(() => {
 		identities = new PlatformAdminTestFixtures();
+		organizations = new OrganizationTestFixtures();
+		memberships = new OrganizationMembershipTestFixtures();
 		sessionIds.clear();
 	});
 
@@ -92,6 +99,8 @@ describe('owner session persistence', () => {
 		for (const id of sessionIds) {
 			await prisma.$executeRaw`DELETE FROM public.owner_sessions WHERE id = ${id}::uuid`;
 		}
+		await memberships.cleanup(prisma, verified);
+		await organizations.cleanup(prisma, verified);
 		await identities.cleanup(prisma, verified);
 	});
 
@@ -119,8 +128,26 @@ describe('owner session persistence', () => {
 		return id;
 	}
 
+	async function createBinding(userId: string): Promise<{
+		readonly organizationId: string;
+		readonly membershipId: string;
+	}> {
+		if (verified === undefined) throw new Error('Development database is not verified.');
+		const organization = organizations.reserve(verified);
+		await prisma.organization.create({
+			data: { ...organization, name: 'Fictional Owner Session Organization' },
+		});
+		const membershipId = memberships.reserveMembershipId(verified);
+		await prisma.organizationMembership.create({
+			data: { id: membershipId, organizationId: organization.id, userId },
+		});
+		return { organizationId: organization.id, membershipId };
+	}
+
 	async function insertAal1Session(userId: string): Promise<{
 		readonly id: string;
+		readonly organizationId: string;
+		readonly membershipId: string;
 		readonly createdAt: Date;
 		readonly idleExpiresAt: Date;
 		readonly absoluteExpiresAt: Date;
@@ -131,37 +158,54 @@ describe('owner session persistence', () => {
 		const idleExpiresAt = new Date(createdAt.getTime() + 30 * 60_000);
 		const absoluteExpiresAt = new Date(createdAt.getTime() + 8 * 60 * 60_000);
 		const digest = createHash('sha256').update(randomUUID()).digest('hex');
+		const { organizationId, membershipId } = await createBinding(userId);
 
 		await prisma.$executeRaw`
 			INSERT INTO public.owner_sessions (
-				id, user_id, token_digest, assurance, authenticated_at, created_at,
+				id, user_id, organization_id, membership_id, token_digest, assurance, authenticated_at, created_at,
 				last_activity_at, idle_expires_at, absolute_expires_at
 			) VALUES (
-				${id}::uuid, ${userId}::uuid, ${digest}, 'aal1', ${createdAt}, ${createdAt},
+				${id}::uuid, ${userId}::uuid, ${organizationId}::uuid, ${membershipId}::uuid,
+				${digest}, 'aal1', ${createdAt}, ${createdAt},
 				${createdAt}, ${idleExpiresAt}, ${absoluteExpiresAt}
 			)
 		`;
 
-		return { id, createdAt, idleExpiresAt, absoluteExpiresAt };
+		return { id, organizationId, membershipId, createdAt, idleExpiresAt, absoluteExpiresAt };
 	}
 
-	it('stores a digest-only AAL1 session for an active global user', async () => {
+	it('stores a digest-only AAL1 session bound to an organization membership', async () => {
 		const userId = await createUser();
 		const session = await insertAal1Session(userId);
 		const [row] = await prisma.$queryRaw<
-			{ userId: string; assurance: string; revokedAt: Date | null }[]
+			{
+				userId: string;
+				organizationId: string;
+				membershipId: string;
+				assurance: string;
+				revokedAt: Date | null;
+			}[]
 		>`
-			SELECT user_id AS "userId", assurance::text, revoked_at AS "revokedAt"
+			SELECT user_id AS "userId", organization_id AS "organizationId",
+				membership_id AS "membershipId", assurance::text, revoked_at AS "revokedAt"
 			FROM public.owner_sessions
 			WHERE id = ${session.id}::uuid
 		`;
 
-		expect(row).toEqual({ userId, assurance: 'aal1', revokedAt: null });
+		expect(row).toEqual({
+			userId,
+			organizationId: session.organizationId,
+			membershipId: session.membershipId,
+			assurance: 'aal1',
+			revokedAt: null,
+		});
 	});
 
 	it('rejects malformed digests, false AAL2 claims and inactive users', async () => {
 		const activeUserId = await createUser();
 		const suspendedUserId = await createUser(UserStatus.SUSPENDED);
+		const activeBinding = await createBinding(activeUserId);
+		const suspendedBinding = await createBinding(suspendedUserId);
 		const createdAt = await databaseNow();
 		const idleExpiresAt = new Date(createdAt.getTime() + 30 * 60_000);
 		const absoluteExpiresAt = new Date(createdAt.getTime() + 8 * 60 * 60_000);
@@ -169,33 +213,51 @@ describe('owner session persistence', () => {
 
 		await expect(prisma.$executeRaw`
 			INSERT INTO public.owner_sessions (
-				id, user_id, token_digest, authenticated_at, created_at, last_activity_at,
+				id, user_id, organization_id, membership_id, token_digest,
+				authenticated_at, created_at, last_activity_at,
 				idle_expires_at, absolute_expires_at
 			) VALUES (
-				${randomUUID()}::uuid, ${activeUserId}::uuid, 'raw-token', ${createdAt}, ${createdAt},
+				${randomUUID()}::uuid, ${activeUserId}::uuid,
+				${activeBinding.organizationId}::uuid, ${activeBinding.membershipId}::uuid,
+				'raw-token', ${createdAt}, ${createdAt},
 				${createdAt}, ${idleExpiresAt}, ${absoluteExpiresAt}
 			)
 		`).rejects.toThrow();
 
 		await expect(prisma.$executeRaw`
 			INSERT INTO public.owner_sessions (
-				id, user_id, token_digest, assurance, authenticated_at, created_at,
+				id, user_id, organization_id, membership_id, token_digest, assurance, authenticated_at, created_at,
 				last_activity_at, idle_expires_at, absolute_expires_at
 			) VALUES (
-				${randomUUID()}::uuid, ${activeUserId}::uuid, ${validDigest}, 'aal2', ${createdAt},
+				${randomUUID()}::uuid, ${activeUserId}::uuid,
+				${activeBinding.organizationId}::uuid, ${activeBinding.membershipId}::uuid,
+				${validDigest}, 'aal2', ${createdAt},
 				${createdAt}, ${createdAt}, ${idleExpiresAt}, ${absoluteExpiresAt}
 			)
 		`).rejects.toThrow();
 
 		await expect(prisma.$executeRaw`
 			INSERT INTO public.owner_sessions (
+				id, user_id, organization_id, membership_id, token_digest,
+				authenticated_at, created_at, last_activity_at,
+				idle_expires_at, absolute_expires_at
+			) VALUES (
+				${randomUUID()}::uuid, ${suspendedUserId}::uuid,
+				${suspendedBinding.organizationId}::uuid, ${suspendedBinding.membershipId}::uuid,
+				${validDigest}, ${createdAt},
+				${createdAt}, ${createdAt}, ${idleExpiresAt}, ${absoluteExpiresAt}
+			)
+		`).rejects.toThrow('owner sessions require an active user and membership');
+
+		await expect(prisma.$executeRaw`
+			INSERT INTO public.owner_sessions (
 				id, user_id, token_digest, authenticated_at, created_at, last_activity_at,
 				idle_expires_at, absolute_expires_at
 			) VALUES (
-				${randomUUID()}::uuid, ${suspendedUserId}::uuid, ${validDigest}, ${createdAt},
+				${randomUUID()}::uuid, ${activeUserId}::uuid, ${validDigest}, ${createdAt},
 				${createdAt}, ${createdAt}, ${idleExpiresAt}, ${absoluteExpiresAt}
 			)
-		`).rejects.toThrow('owner sessions require an active user');
+		`).rejects.toThrow('owner sessions require an active user and membership');
 	});
 
 	it('allows bounded activity refresh while protecting session identity', async () => {
