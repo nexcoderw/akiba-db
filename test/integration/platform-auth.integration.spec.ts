@@ -391,8 +391,8 @@ describe('platform authentication persistence', () => {
 				},
 				data: { consumedAt: REFERENCE_TIME },
 			});
-		expect((await consume()).count).toBe(1);
-		expect((await consume()).count).toBe(0);
+		const completions = await Promise.all([consume(), consume()]);
+		expect(completions.map(({ count }) => count).sort()).toEqual([0, 1]);
 		await expect(eligibleChallenge(activeDigest)).resolves.toBeNull();
 	});
 
