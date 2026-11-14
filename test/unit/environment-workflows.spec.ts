@@ -41,6 +41,7 @@ describe('two-branch Neon workflow', () => {
 				test: 'node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs --selectProjects unit --runInBand',
 				'test:integration': 'node scripts/run-integration-tests.mjs',
 				'migration:diff': 'node scripts/database-command.mjs development diff',
+				'migration:review': 'node scripts/database-command.mjs development review',
 				'migration:deploy': 'node scripts/database-command.mjs development deploy',
 				'migration:production:deploy': 'node scripts/database-command.mjs production deploy',
 			},
