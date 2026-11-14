@@ -519,6 +519,8 @@ model PlatformStaff {
   id                                 String                                @id @default(uuid()) @db.Uuid
   userId                             String                                @unique(map: "platform_staff_user_id_key") @map("user_id") @db.Uuid
   status                             PlatformStaffStatus
+  mfaVersion                         Int                                   @default(1) @map("mfa_version")
+  recoveryGeneration                 Int                                   @default(1) @map("recovery_generation")
   suspendedAt                        DateTime?                             @map("suspended_at") @db.Timestamptz(6)
   createdAt                          DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                          DateTime                              @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -534,26 +536,31 @@ model PlatformStaff {
   ownerInvitationDeliveriesRequested OrganizationOwnerInvitationDelivery[]
   ownershipAuditEvents               OrganizationOwnershipAuditEvent[]
   identitySecurityActions            IdentitySecurityAuditEvent[]
+  securityNotifications              PlatformSecurityNotification[]
 
   @@index([status], map: "platform_staff_status_idx")
   @@map("platform_staff")
 }
 
-/// Server-side Akiba administration session. Only a digest of the high-entropy token is stored,
-/// and the required MFA timestamp prevents this record from representing a pre-MFA login state.
+/// Server-side Akiba administration session. Only a digest of the high-entropy token is stored.
+/// The API admits TOTP to full authority and confines recovery to short-lived MFA repair.
 model PlatformAdminSession {
-  id               String        @id @default(uuid()) @db.Uuid
-  platformStaffId  String        @map("platform_staff_id") @db.Uuid
-  tokenDigest      String        @unique(map: "platform_admin_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
-  idleExpiresAt    DateTime      @map("idle_expires_at") @db.Timestamptz(6)
-  lastSeenAt       DateTime      @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  mfaVerifiedAt    DateTime      @map("mfa_verified_at") @db.Timestamptz(6)
-  revokedAt        DateTime?     @map("revoked_at") @db.Timestamptz(6)
-  revocationReason String?       @map("revocation_reason") @db.VarChar(40)
-  platformStaff    PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id                   String                 @id @default(uuid()) @db.Uuid
+  platformStaffId      String                 @map("platform_staff_id") @db.Uuid
+  authenticationMethod String                 @default("legacy") @map("authentication_method") @db.VarChar(24)
+  mfaVersion           Int                    @default(1) @map("mfa_version")
+  tokenDigest          String                 @unique(map: "platform_admin_sessions_token_digest_key") @map("token_digest") @db.VarChar(128)
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt            DateTime               @map("expires_at") @db.Timestamptz(6)
+  idleExpiresAt        DateTime               @map("idle_expires_at") @db.Timestamptz(6)
+  lastSeenAt           DateTime               @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  mfaVerifiedAt        DateTime               @map("mfa_verified_at") @db.Timestamptz(6)
+  revokedAt            DateTime?              @map("revoked_at") @db.Timestamptz(6)
+  revocationReason     String?                @map("revocation_reason") @db.VarChar(40)
+  platformStaff        PlatformStaff          @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  managementChallenges PlatformMfaChallenge[]
 
+  @@unique([platformStaffId, id], map: "platform_admin_sessions_staff_id_key")
   @@index([platformStaffId, revokedAt, expiresAt], map: "platform_admin_sessions_staff_active_idx")
   @@index([expiresAt], map: "platform_admin_sessions_expires_at_idx")
   @@index([idleExpiresAt], map: "platform_admin_sessions_idle_expires_at_idx")
@@ -592,20 +599,24 @@ model OwnerSession {
 /// Encrypted TOTP factor for one platform staff identity. Encryption and authenticated-decryption
 /// keys remain outside PostgreSQL; the API must atomically advance the accepted time step.
 model PlatformTotpCredential {
-  id                   String        @id @default(uuid()) @db.Uuid
-  platformStaffId      String        @unique(map: "platform_totp_credentials_staff_key") @map("platform_staff_id") @db.Uuid
-  encryptedSecret      Bytes         @map("encrypted_secret") @db.ByteA
-  encryptionKeyId      String        @map("encryption_key_id") @db.VarChar(120)
-  encryptionVersion    Int           @default(1) @map("encryption_version")
-  initializationVector Bytes         @map("initialization_vector") @db.ByteA
-  authenticationTag    Bytes         @map("authentication_tag") @db.ByteA
-  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  verifiedAt           DateTime?     @map("verified_at") @db.Timestamptz(6)
-  lastUsedAt           DateTime?     @map("last_used_at") @db.Timestamptz(6)
-  lastAcceptedTimeStep BigInt?       @map("last_accepted_time_step") @db.BigInt
-  disabledAt           DateTime?     @map("disabled_at") @db.Timestamptz(6)
-  platformStaff        PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  id                   String                 @id @default(uuid()) @db.Uuid
+  platformStaffId      String                 @unique(map: "platform_totp_credentials_staff_key") @map("platform_staff_id") @db.Uuid
+  label                String                 @default("Authenticator") @db.VarChar(80)
+  version              Int                    @default(1)
+  encryptedSecret      Bytes                  @map("encrypted_secret") @db.ByteA
+  encryptionKeyId      String                 @map("encryption_key_id") @db.VarChar(120)
+  encryptionVersion    Int                    @default(1) @map("encryption_version")
+  initializationVector Bytes                  @map("initialization_vector") @db.ByteA
+  authenticationTag    Bytes                  @map("authentication_tag") @db.ByteA
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  verifiedAt           DateTime?              @map("verified_at") @db.Timestamptz(6)
+  lastUsedAt           DateTime?              @map("last_used_at") @db.Timestamptz(6)
+  lastAcceptedTimeStep BigInt?                @map("last_accepted_time_step") @db.BigInt
+  disabledAt           DateTime?              @map("disabled_at") @db.Timestamptz(6)
+  platformStaff        PlatformStaff          @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  managementChallenges PlatformMfaChallenge[]
 
+  @@unique([platformStaffId, id], map: "platform_totp_credentials_staff_id_key")
   @@map("platform_totp_credentials")
 }
 
@@ -614,6 +625,8 @@ model PlatformTotpCredential {
 model PlatformRecoveryCode {
   id              String        @id @default(uuid()) @db.Uuid
   platformStaffId String        @map("platform_staff_id") @db.Uuid
+  generation      Int           @default(1)
+  digestVersion   Int           @default(1) @map("digest_version")
   codeDigest      String        @unique(map: "platform_recovery_codes_digest_key") @map("code_digest") @db.VarChar(128)
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   usedAt          DateTime?     @map("used_at") @db.Timestamptz(6)
@@ -623,27 +636,62 @@ model PlatformRecoveryCode {
   @@map("platform_recovery_codes")
 }
 
-/// Short-lived pre-authentication MFA challenge. It grants no platform access and can become a
-/// session only through an authorized API flow after expiry, consumption, and attempt checks.
+/// Short-lived login, session-bound step-up or encrypted enrollment proof. Purpose, security
+/// versions, expiry, attempts and single-use state are rechecked by the authorized API flow.
 model PlatformMfaChallenge {
-  id                String        @id @default(uuid()) @db.Uuid
-  platformStaffId   String        @map("platform_staff_id") @db.Uuid
-  tokenDigest       String        @unique(map: "platform_mfa_challenges_token_digest_key") @map("token_digest") @db.VarChar(128)
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt         DateTime      @map("expires_at") @db.Timestamptz(6)
-  consumedAt        DateTime?     @map("consumed_at") @db.Timestamptz(6)
-  failedAttempts    Int           @default(0) @map("failed_attempts")
-  maxAttempts       Int           @default(5) @map("max_attempts")
+  id                   String                  @id @default(uuid()) @db.Uuid
+  platformStaffId      String                  @map("platform_staff_id") @db.Uuid
+  purpose              String                  @default("login") @db.VarChar(16)
+  operation            String?                 @db.VarChar(32)
+  platformSessionId    String?                 @map("platform_session_id") @db.Uuid
+  mfaVersion           Int                     @default(1) @map("mfa_version")
+  identityVersion      Int?                    @map("identity_version")
+  credentialVersion    Int?                    @map("credential_version")
+  factorVersion        Int?                    @map("factor_version")
+  factorId             String?                 @map("factor_id") @db.Uuid
+  verifiedAt           DateTime?               @map("verified_at") @db.Timestamptz(6)
+  label                String?                 @db.VarChar(80)
+  encryptedSecret      Bytes?                  @map("encrypted_secret") @db.ByteA
+  encryptionKeyId      String?                 @map("encryption_key_id") @db.VarChar(120)
+  encryptionVersion    Int?                    @map("encryption_version")
+  initializationVector Bytes?                  @map("initialization_vector") @db.ByteA
+  authenticationTag    Bytes?                  @map("authentication_tag") @db.ByteA
+  tokenDigest          String                  @unique(map: "platform_mfa_challenges_token_digest_key") @map("token_digest") @db.VarChar(128)
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt            DateTime                @map("expires_at") @db.Timestamptz(6)
+  consumedAt           DateTime?               @map("consumed_at") @db.Timestamptz(6)
+  failedAttempts       Int                     @default(0) @map("failed_attempts")
+  maxAttempts          Int                     @default(5) @map("max_attempts")
   /// Keyed digest scoped to this challenge and verified recipient; never store the plaintext OTP.
-  emailOtpDigest    String?       @map("email_otp_digest") @db.VarChar(128)
-  emailOtpExpiresAt DateTime?     @map("email_otp_expires_at") @db.Timestamptz(6)
-  emailOtpSentAt    DateTime?     @map("email_otp_sent_at") @db.Timestamptz(6)
-  emailOtpSendCount Int           @default(0) @map("email_otp_send_count")
-  platformStaff     PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  emailOtpDigest       String?                 @map("email_otp_digest") @db.VarChar(128)
+  emailOtpExpiresAt    DateTime?               @map("email_otp_expires_at") @db.Timestamptz(6)
+  emailOtpSentAt       DateTime?               @map("email_otp_sent_at") @db.Timestamptz(6)
+  emailOtpSendCount    Int                     @default(0) @map("email_otp_send_count")
+  platformStaff        PlatformStaff           @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  platformSession      PlatformAdminSession?   @relation(fields: [platformStaffId, platformSessionId], references: [platformStaffId, id], onDelete: Restrict, onUpdate: Restrict, map: "platform_mfa_challenges_session_fkey")
+  factor               PlatformTotpCredential? @relation(fields: [platformStaffId, factorId], references: [platformStaffId, id], onDelete: Restrict, onUpdate: Restrict, map: "platform_mfa_challenges_factor_fkey")
 
   @@index([platformStaffId, consumedAt, expiresAt], map: "platform_mfa_challenges_staff_active_idx")
   @@index([expiresAt], map: "platform_mfa_challenges_expires_at_idx")
+  @@index([platformSessionId], map: "platform_mfa_challenges_session_idx")
   @@map("platform_mfa_challenges")
+}
+
+/// Durable security notifications contain an approved event and recipient only, never MFA material.
+model PlatformSecurityNotification {
+  id                String        @id @default(uuid()) @db.Uuid
+  platformStaffId   String        @map("platform_staff_id") @db.Uuid
+  recipient         String        @db.Citext
+  event             String        @db.VarChar(48)
+  requestId         String        @map("request_id") @db.VarChar(80)
+  status            String        @default("queued") @db.VarChar(16)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt            DateTime?     @map("sent_at") @db.Timestamptz(6)
+  providerMessageId String?       @map("provider_message_id") @db.VarChar(128)
+  platformStaff     PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status, createdAt, id], map: "platform_security_notifications_queue_idx")
+  @@map("platform_security_notifications")
 }
 
 model PlatformRole {
