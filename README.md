@@ -7,11 +7,11 @@ package version and import its root API; they do not copy schemas or run migrati
 
 ## Current foundation and scope
 
-The schema retains 28 foundation models and 14 enums: global users and password credentials;
+The schema retains 29 foundation models and 14 enums: global users and password credentials;
 platform staff, roles and permissions; platform sessions, encrypted TOTP, recovery codes and MFA
 challenges; organizations with unique slugs/lifecycle; organization access memberships, roles and
 assignments and versioned organization permission mappings; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
-global mailbox proofs and identity security audits; and organization/platform/ownership audits.
+global mailbox proofs and identity security audits; platform security notifications; and organization/platform/ownership audits.
 SQL preserves restrictive relations, tenant-composite
 foreign keys, scoped indexes, integrity checks, audit timestamps and onboarding guards.
 
@@ -393,3 +393,82 @@ transactions fail closed. The Prisma schema and public package types remain comp
 through the approved local dependency; update the API CI database revision after reviewing the DB
 commits. The added integration cases exercise real constraints with synthetic records and roll
 their audit writes back. They have not been executed by the agent.
+
+## Platform MFA management expansion
+
+`20261114120000_platform_mfa_management` is a draft forward migration pending human development
+status/drift preflight, SQL review and deployment. It must follow the authentication audit migration.
+It adds no Neon resource or PostgreSQL role and does not rewrite applied history. Review locks,
+backup/forward-recovery and deliberate platform logout before approval. Keep API MFA management
+disabled and stop old API/worker processes during deployment: old clients do not populate the new
+method/version contract. The migration revokes all active legacy platform sessions and consumes
+pending login challenges because historical rows cannot establish which MFA method issued them.
+
+PlatformStaff receives MFA/recovery generation counters; PlatformAdminSession records authentication
+method and its MFA generation. Full TOTP, restricted recovery, email verification and legacy methods
+remain distinguishable by API policy. PlatformTotpCredential retains its unique staff-owned slot and
+adds a safe label/version. PlatformRecoveryCode adds generation and verifier-version fields; v1
+remains compatible until rotation and new API writes use a purpose-separated HMAC v2 verifier.
+
+PlatformMfaChallenge is reused for login, step-up and pending enrollment. New proofs bind the staff,
+session, purpose, operation, target and security versions. Composite session/factor foreign keys prevent
+cross-staff references. CHECKs require explicit management operations, short expiry, valid versions
+and complete authenticated-encryption metadata for enrollment; no plaintext secret column exists.
+A partial unique index bounds each staff identity to one unconsumed proof per management purpose.
+The API supersedes earlier management proofs and never extends an enrollment's original deadline.
+
+Database triggers serialize against the staff row, preserve factor ownership, prevent deletion or
+disablement/unverification of the final active factor for non-revoked staff, and maintain the factor
+version. Verified activation/replacement increments MFA/recovery generations, revokes all platform
+sessions and unconsumed challenges and invalidates unused recovery verifiers in the same transaction.
+Label and last-use/replay updates preserve the version. Retirement of reserved synthetic staff permits
+ordinary fixture cleanup without disabling constraints. The API supplies recent reauthentication,
+encrypted setup, TOTP/recovery verification, purpose checks, conditional consumption, audit and
+notification orchestration; these database structures never grant HTTP authority by themselves.
+
+PlatformSecurityNotification is the only new model: approved event/verified recipient/request ID,
+queued/sending/sent/uncertain/failed state, provider message ID and timestamps. It contains no setup secret, proof or raw
+recovery code. A queue index supports bounded reservation, while restrictive staff references and
+status/event/recipient checks protect ordinary writes. The API worker uses a conditional reservation
+and provider idempotency key, never a blind retry after uncertain delivery. Outbox retention and
+operator reconciliation remain required. Existing identity-audit CHECKs expand for MFA events while
+append-only triggers, actor checks and restrictive references remain intact. No RLS policy is added;
+managed-owner connections still do not demonstrate tenant isolation.
+
+After reviewing current history, compare the development datasource/schema SQL with this draft,
+including all custom CHECKs and triggers. A clean Prisma diff alone cannot validate those controls.
+Run the following as a human, stopping on any unexpected status or diff:
+
+```bash
+npm run migration:status
+npm run migration:review
+```
+
+Status may report this draft as pending. `migration:review` performs only the guarded development
+datasource-to-schema SQL diff even with a pending draft; it neither deploys nor marks migrations
+applied. Stop on unexpected history or connection errors. Ordinary `migration:diff` and
+`migration:check` retain their synchronized-history requirement. There is no production review bypass.
+
+After explicit SQL review and approval in an exclusive development window:
+
+```bash
+npm run migration:deploy
+npm run prisma:format
+npm run prisma:validate
+npm run prisma:generate
+npm run format
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build
+npm run migration:check
+npm run test:integration
+```
+
+Generate and build this package before API type checks; new fields are absent from an old client.
+Keep the API's approved sibling dependency and update its CI DB revision to the reviewed immutable
+commit. No package publish/version bump or generated artifact is supplied. Unit export expectations
+include the new notification model; guarded synthetic integration cases cover final-factor denial,
+replacement and TOTP/recovery races, session/code invalidation, composite proof ownership, pending
+encryption constraints and rollback on audit failure. These checks are authored, NOT VERIFIED until
+human output is available. No production deployment or live validation was performed by the agent.
