@@ -51,6 +51,7 @@
     "test:integration": "node scripts/run-integration-tests.mjs",
     "prepack": "npm run build",
     "migration:diff": "node scripts/database-command.mjs development diff",
+    "migration:review": "node scripts/database-command.mjs development review",
     "migration:check": "node scripts/database-command.mjs development check",
     "migration:production:status": "node scripts/database-command.mjs production status",
     "migration:production:check": "node scripts/database-command.mjs production check",
