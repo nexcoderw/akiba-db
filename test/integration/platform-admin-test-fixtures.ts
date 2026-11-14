@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { PrismaService } from '../../src/database/prisma.service.js';
+import { PlatformStaffStatus } from '../../src/generated/prisma/client.js';
 import {
 	assertDevelopmentDatabaseWasVerified,
 	type VerifiedDevelopmentDatabase,
@@ -88,6 +89,26 @@ export class PlatformAdminTestFixtures {
 
 		await prisma.$transaction(
 			async (transaction) => {
+				// Retire only reserved synthetic staff before deleting their final required factor.
+				if (platformStaffIds.length > 0) {
+					await transaction.platformStaff.updateMany({
+						where: { id: { in: platformStaffIds } },
+						data: { status: PlatformStaffStatus.REVOKED, suspendedAt: null },
+					});
+					await transaction.platformSecurityNotification.deleteMany({
+						where: { platformStaffId: { in: platformStaffIds } },
+					});
+				}
+				if (platformMfaChallengeIds.length > 0 || platformStaffIds.length > 0) {
+					await transaction.platformMfaChallenge.deleteMany({
+						where: {
+							OR: [
+								{ id: { in: platformMfaChallengeIds } },
+								{ platformStaffId: { in: platformStaffIds } },
+							],
+						},
+					});
+				}
 				if (platformAdminSessionIds.length > 0 || platformStaffIds.length > 0) {
 					await transaction.platformAdminSession.deleteMany({
 						where: {
@@ -113,16 +134,6 @@ export class PlatformAdminTestFixtures {
 						where: {
 							OR: [
 								{ id: { in: platformRecoveryCodeIds } },
-								{ platformStaffId: { in: platformStaffIds } },
-							],
-						},
-					});
-				}
-				if (platformMfaChallengeIds.length > 0 || platformStaffIds.length > 0) {
-					await transaction.platformMfaChallenge.deleteMany({
-						where: {
-							OR: [
-								{ id: { in: platformMfaChallengeIds } },
 								{ platformStaffId: { in: platformStaffIds } },
 							],
 						},
