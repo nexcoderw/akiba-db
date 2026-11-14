@@ -6,9 +6,9 @@ const [selected, action, ...extra] = process.argv.slice(2);
 
 if (
 	!['development', 'production'].includes(selected ?? '') ||
-	!['status', 'diff', 'check', 'deploy'].includes(action ?? '') ||
+	!['status', 'diff', 'review', 'check', 'deploy'].includes(action ?? '') ||
 	extra.length ||
-	(selected === 'production' && action === 'diff')
+	(selected === 'production' && ['diff', 'review'].includes(action ?? ''))
 ) {
 	console.error('Use a supported migration script without additional arguments.');
 	process.exit(1);
@@ -31,9 +31,13 @@ try {
 		});
 		return result.status ?? 1;
 	};
-	if (action === 'diff' || action === 'check') {
-		const status = run(['migrate', 'status'], true);
-		if (status !== 0) process.exit(status);
+	if (action === 'diff' || action === 'review' || action === 'check') {
+		// Review is read-only and permits examining an authored pending migration before deploy.
+		// Ordinary drift checks still require synchronized history. The operator reviews status first.
+		if (action !== 'review') {
+			const status = run(['migrate', 'status'], true);
+			if (status !== 0) process.exit(status);
+		}
 		process.exit(
 			run([
 				'migrate',
@@ -41,7 +45,7 @@ try {
 				'--from-config-datasource',
 				'--to-schema',
 				'prisma/schema.prisma',
-				action === 'diff' ? '--script' : '--exit-code',
+				action === 'check' ? '--exit-code' : '--script',
 			]),
 		);
 	}
