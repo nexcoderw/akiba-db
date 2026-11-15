@@ -472,3 +472,28 @@ include the new notification model; guarded synthetic integration cases cover fi
 replacement and TOTP/recovery races, session/code invalidation, composite proof ownership, pending
 encryption constraints and rollback on audit failure. These checks are authored, NOT VERIFIED until
 human output is available. No production deployment or live validation was performed by the agent.
+
+## Step 13 database release assessment
+
+Inspected main baseline: `06e62b3e220b2b952197f9042a4cd9a4cc4eb8b5`; cached origin/main matched,
+but remote freshness was not fetched. No live database command was executed. The Step 13 change in
+this repository disables checkout credential persistence during CI build/test steps. It adds no
+model, migration, database, PostgreSQL role or grant. CI execution is NOT VERIFIED.
+
+Production remains NO-GO. Actual runtime user, memberships, BYPASSRLS, ownership, RLS/FORCE RLS,
+policies and grants are NOT VERIFIED. Source history has no tenant RLS policies. Existing owner-based
+tests and transaction-local settings cannot establish independent database-enforced read isolation.
+The API README contains the finding matrix, application threat model and ten production release gates.
+
+REQUIRES OWNER APPROVAL: consider a narrowly scoped non-owner/non-BYPASSRLS runtime identity and
+reviewed policies if necessary to satisfy isolation. Inventory effective grants and ownership first;
+design tenant policies and separate narrow platform/worker authority; authorize role/privilege changes;
+test on the existing synthetic development branch, including cross-tenant reads/writes and rollback;
+review client compatibility and forward recovery before a protected production rollout. No role is
+created by this proposal, and a privileged owner connection must not be an implicit runtime fallback.
+
+Human diagnostics: `npm run security:tenant:audit` is the existing guarded read-only development
+command. Its result must be reviewed; absence of a connection error is not an isolation PASS.
+Review migration status/checksums and schema drift before any deploy; inspect custom SQL separately.
+Demonstrate backup/PITR access, a synthetic restore rehearsal, restricted backup access, named incident
+ownership and forward-recovery procedures. Provider backup availability alone is not restore evidence.
