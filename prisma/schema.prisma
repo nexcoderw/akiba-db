@@ -537,9 +537,39 @@ model PlatformStaff {
   ownershipAuditEvents               OrganizationOwnershipAuditEvent[]
   identitySecurityActions            IdentitySecurityAuditEvent[]
   securityNotifications              PlatformSecurityNotification[]
+  ownerEnrollment                    PlatformOwnerEnrollment?
 
   @@index([status], map: "platform_staff_status_idx")
   @@map("platform_staff")
+}
+
+/// Operator-issued first-owner setup only; never a recovery path for an active account.
+/// The mailbox proof is exchanged once for a short-lived, origin-sealed browser proof.
+model PlatformOwnerEnrollment {
+  id                   String        @id @default(uuid()) @db.Uuid
+  platformStaffId      String        @unique(map: "platform_owner_enrollments_staff_key") @map("platform_staff_id") @db.Uuid
+  email                String        @db.Citext
+  identityVersion      Int           @map("identity_version")
+  tokenDigest          String        @unique(map: "platform_owner_enrollments_token_key") @map("token_digest") @db.VarChar(128)
+  sessionDigest        String?       @unique(map: "platform_owner_enrollments_session_key") @map("session_digest") @db.VarChar(128)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt            DateTime      @map("expires_at") @db.Timestamptz(6)
+  sentAt               DateTime?     @map("sent_at") @db.Timestamptz(6)
+  exchangedAt          DateTime?     @map("exchanged_at") @db.Timestamptz(6)
+  consumedAt           DateTime?     @map("consumed_at") @db.Timestamptz(6)
+  sendCount            Int           @default(1) @map("send_count")
+  failedAttempts       Int           @default(0) @map("failed_attempts")
+  setupVersion         Int           @default(0) @map("setup_version")
+  passwordHash         String?       @map("password_hash") @db.VarChar(255)
+  encryptedSecret      Bytes?        @map("encrypted_secret") @db.ByteA
+  encryptionKeyId      String?       @map("encryption_key_id") @db.VarChar(120)
+  encryptionVersion    Int?          @map("encryption_version")
+  initializationVector Bytes?        @map("initialization_vector") @db.ByteA
+  authenticationTag    Bytes?        @map("authentication_tag") @db.ByteA
+  platformStaff        PlatformStaff @relation(fields: [platformStaffId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "platform_owner_enrollments_staff_fkey")
+
+  @@index([expiresAt], map: "platform_owner_enrollments_expiry_idx")
+  @@map("platform_owner_enrollments")
 }
 
 /// Server-side Akiba administration session. Only a digest of the high-entropy token is stored.

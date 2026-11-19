@@ -71,6 +71,7 @@ describe('public package exports', () => {
 				'PlatformTotpCredential',
 				'PlatformRecoveryCode',
 				'PlatformMfaChallenge',
+				'PlatformOwnerEnrollment',
 				'PlatformSecurityNotification',
 				'PlatformRole',
 				'PlatformPermission',
