@@ -7,7 +7,7 @@ package version and import its root API; they do not copy schemas or run migrati
 
 ## Current foundation and scope
 
-The schema retains 29 foundation models and 14 enums: global users and password credentials;
+The schema retains 30 foundation models and 14 enums: global users and password credentials;
 platform staff, roles and permissions; platform sessions, encrypted TOTP, recovery codes and MFA
 challenges; organizations with unique slugs/lifecycle; organization access memberships, roles and
 assignments and versioned organization permission mappings; owner invitations, encrypted delivery, enrollment and acceptance records; owner sessions;
@@ -44,6 +44,24 @@ again after deployment. Review the migration SQL and current development drift b
 apply it in a maintenance window, then regenerate the client and build this package before
 building the API. The migration never provisions a database or role. If deployment fails,
 retain the current applied history and prepare a reviewed forward repair; do not reset Neon.
+
+## First platform owner enrollment storage
+
+`PlatformOwnerEnrollment` is separate from login/session proofs. The additive draft migration
+`20261119080000_platform_owner_enrollment` stores one operator-issued setup record per staff identity,
+mailbox/session digests, pending password hash, encrypted TOTP material and bounded lifecycle counters.
+Its trigger restricts writes to the sole pending system owner and prevents proof/attempt rollback.
+It adds no administrative HTTP workflow or database reset. The API owns delivery, password policy,
+mailbox exchange, TOTP verification, activation and audit writes.
+
+This SQL was authored without a connected datasource diff or deployment. Before applying it, the human
+must review approved development status/drift, compare `npm run migration:review` with the authored SQL
+and inspect its custom constraints/trigger. Then use the guarded migration deployment and integration
+workflow below. Generate/build this package before the dependent API. Update API CI's reviewed DB
+source revision after committing. Existing applied migrations remain unchanged; code rollback does not
+undo this additive table. Do not drop it to repair a failed deployment; prepare a reviewed forward fix.
+Offline storage-contract tests are included but have not been run. Live constraints, concurrent
+activation, trigger ordering and guarded integration verification remain human release gates.
 
 ## Technology and layout
 
