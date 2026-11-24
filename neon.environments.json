@@ -5,7 +5,7 @@
     "user": "neondb_owner"
   },
   "production": {
-    "directHost": "",
+    "directHost": "ep-morning-mud-be6dhi7t.c-9.us-east-2.aws.neon.tech",
     "database": "neondb",
     "user": "neondb_owner"
   }
