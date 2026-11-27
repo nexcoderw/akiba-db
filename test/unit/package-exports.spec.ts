@@ -67,6 +67,7 @@ describe('public package exports', () => {
 				'PasswordCredential',
 				'PlatformStaff',
 				'PlatformAdminSession',
+				'OwnerEmailOtpChallenge',
 				'OwnerSession',
 				'PlatformTotpCredential',
 				'PlatformRecoveryCode',

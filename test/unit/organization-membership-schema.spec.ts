@@ -30,7 +30,10 @@ describe('organization membership schema contract', () => {
 				new RegExp(`${field}\\s+DateTime\\??[^\\n]+@db\\.Timestamptz\\(6\\)`, 'u'),
 			);
 		}
-		expect(membership).not.toMatch(/email|password|displayName|platformStaff/iu);
+		const otpRelation = /^[ \t]*ownerEmailOtpChallenges[ \t]+OwnerEmailOtpChallenge\[\][ \t]*$/mu;
+		expect(membership).toMatch(otpRelation);
+		const fields = membership?.replace(otpRelation, '');
+		expect(fields).not.toMatch(/email|password|displayName|platformStaff/iu);
 	});
 
 	it('keeps organization roles tenant-owned and reserves owner through reviewed SQL checks', async () => {

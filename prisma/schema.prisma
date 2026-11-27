@@ -18,8 +18,9 @@ enum UserStatus {
 }
 
 enum OwnerSessionAssurance {
-  AAL1 @map("aal1")
-  AAL2 @map("aal2")
+  AAL1               @map("aal1")
+  AAL2               @map("aal2")
+  PASSWORD_EMAIL_OTP @map("password_email_otp")
 
   @@map("owner_session_assurance")
 }
@@ -144,6 +145,7 @@ model Organization {
   ownershipAuditEvents       OrganizationOwnershipAuditEvent[]
   ownerEnrollmentChallenges  OrganizationOwnerEnrollmentChallenge[]
   ownerAcceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
+  ownerEmailOtpChallenges    OwnerEmailOtpChallenge[]
 
   @@index([status, createdAt(sort: Desc), id], map: "organizations_status_created_at_id_idx")
   @@map("organizations")
@@ -167,6 +169,7 @@ model User {
   ownerEnrollmentChallenges       OrganizationOwnerEnrollmentChallenge[]
   ownerAcceptanceAuditEvents      OrganizationOwnerAcceptanceAuditEvent[]
   ownerSessions                   OwnerSession[]
+  ownerEmailOtpChallenges         OwnerEmailOtpChallenge[]
   emailVerificationChallenges     UserEmailVerificationChallenge[]
   identitySecurityEvents          IdentitySecurityAuditEvent[]            @relation("identity_audit_subject")
   identitySecurityActions         IdentitySecurityAuditEvent[]            @relation("identity_audit_actor")
@@ -196,6 +199,7 @@ model OrganizationMembership {
   authorizationEventsAsTarget OrganizationAuthorizationAuditEvent[]   @relation("organization_authorization_target_membership")
   ownerAcceptanceAuditEvents  OrganizationOwnerAcceptanceAuditEvent[]
   sessions                    OwnerSession[]
+  ownerEmailOtpChallenges     OwnerEmailOtpChallenge[]
 
   @@unique([organizationId, userId], map: "organization_memberships_organization_user_key")
   @@unique([organizationId, id], map: "organization_memberships_organization_id_key")
@@ -329,29 +333,30 @@ model OrganizationOwnerInvitation {
 /// neither invitation possession nor a persisted status alone authenticates a recipient.
 /// Reviewed SQL must enforce proof lifecycle, monotonic attempts, expiry and single consumption.
 model OrganizationOwnerEnrollmentChallenge {
-  id                    String                                  @id(map: "owner_enrollment_challenges_pkey") @default(uuid()) @db.Uuid
-  organizationId        String                                  @map("organization_id") @db.Uuid
-  ownerInvitationId     String                                  @map("owner_invitation_id") @db.Uuid
-  userId                String?                                 @map("user_id") @db.Uuid
-  purpose               OrganizationOwnerEnrollmentPurpose
-  status                OrganizationOwnerEnrollmentStatus       @default(PENDING)
-  tokenDigest           String?                                 @unique(map: "owner_enrollment_challenges_token_digest_key") @map("token_digest") @db.VarChar(128)
-  failedAttempts        Int                                     @default(0) @map("failed_attempts")
-  maxAttempts           Int                                     @default(5) @map("max_attempts")
-  createdAt             DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  expiresAt             DateTime                                @map("expires_at") @db.Timestamptz(6)
-  mailboxVerifiedAt     DateTime?                               @map("mailbox_verified_at") @db.Timestamptz(6)
-  authenticatedAt       DateTime?                               @map("authenticated_at") @db.Timestamptz(6)
-  stepUpVerifiedAt      DateTime?                               @map("step_up_verified_at") @db.Timestamptz(6)
-  verifiedAt            DateTime?                               @map("verified_at") @db.Timestamptz(6)
-  consumedAt            DateTime?                               @map("consumed_at") @db.Timestamptz(6)
-  revokedAt             DateTime?                               @map("revoked_at") @db.Timestamptz(6)
-  organization          Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_organization_fkey")
-  ownerInvitation       OrganizationOwnerInvitation             @relation(fields: [organizationId, ownerInvitationId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_invitation_fkey")
-  user                  User?                                   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_user_fkey")
-  acceptanceAuditEvents OrganizationOwnerAcceptanceAuditEvent[]
-  provisionalSessions   OwnerSession[]
+  id                      String                                  @id(map: "owner_enrollment_challenges_pkey") @default(uuid()) @db.Uuid
+  organizationId          String                                  @map("organization_id") @db.Uuid
+  ownerInvitationId       String                                  @map("owner_invitation_id") @db.Uuid
+  userId                  String?                                 @map("user_id") @db.Uuid
+  purpose                 OrganizationOwnerEnrollmentPurpose
+  status                  OrganizationOwnerEnrollmentStatus       @default(PENDING)
+  tokenDigest             String?                                 @unique(map: "owner_enrollment_challenges_token_digest_key") @map("token_digest") @db.VarChar(128)
+  failedAttempts          Int                                     @default(0) @map("failed_attempts")
+  maxAttempts             Int                                     @default(5) @map("max_attempts")
+  createdAt               DateTime                                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt               DateTime                                @map("expires_at") @db.Timestamptz(6)
+  mailboxVerifiedAt       DateTime?                               @map("mailbox_verified_at") @db.Timestamptz(6)
+  authenticatedAt         DateTime?                               @map("authenticated_at") @db.Timestamptz(6)
+  stepUpVerifiedAt        DateTime?                               @map("step_up_verified_at") @db.Timestamptz(6)
+  verifiedAt              DateTime?                               @map("verified_at") @db.Timestamptz(6)
+  consumedAt              DateTime?                               @map("consumed_at") @db.Timestamptz(6)
+  revokedAt               DateTime?                               @map("revoked_at") @db.Timestamptz(6)
+  organization            Organization                            @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_organization_fkey")
+  ownerInvitation         OrganizationOwnerInvitation             @relation(fields: [organizationId, ownerInvitationId], references: [organizationId, id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_invitation_fkey")
+  user                    User?                                   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_enrollment_challenges_user_fkey")
+  acceptanceAuditEvents   OrganizationOwnerAcceptanceAuditEvent[]
+  provisionalSessions     OwnerSession[]
+  ownerEmailOtpChallenges OwnerEmailOtpChallenge[]
 
   @@unique([organizationId, id, ownerInvitationId, userId], map: "owner_enrollment_challenges_proof_identity_key")
   @@unique([organizationId, id, userId], map: "owner_enrollment_challenges_org_id_user_key")
@@ -599,6 +604,32 @@ model PlatformAdminSession {
 
 /// An organization session is bound to the membership selected during authentication.
 /// Legacy unbound rows are revoked by the forward migration and cannot authenticate.
+model OwnerEmailOtpChallenge {
+  id                    String                                @id @default(uuid()) @db.Uuid
+  organizationId        String                                @map("organization_id") @db.Uuid
+  userId                String                                @map("user_id") @db.Uuid
+  membershipId          String?                               @map("membership_id") @db.Uuid
+  enrollmentChallengeId String?                               @map("enrollment_challenge_id") @db.Uuid
+  purpose               String                                @db.VarChar(16)
+  origin                String                                @db.VarChar(512)
+  identityVersion       Int                                   @map("identity_version")
+  credentialVersion     Int                                   @map("credential_version")
+  tokenDigest           String                                @unique(map: "owner_email_otp_token_key") @map("token_digest") @db.VarChar(64)
+  codeDigest            String                                @map("code_digest") @db.VarChar(64)
+  attempts              Int                                   @default(0)
+  createdAt             DateTime                              @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt             DateTime                              @map("expires_at") @db.Timestamptz(6)
+  sentAt                DateTime?                             @map("sent_at") @db.Timestamptz(6)
+  consumedAt            DateTime?                             @map("consumed_at") @db.Timestamptz(6)
+  organization          Organization                          @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_email_otp_organization_fkey")
+  user                  User                                  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "owner_email_otp_user_fkey")
+  membership            OrganizationMembership?               @relation(fields: [organizationId, membershipId, userId], references: [organizationId, id, userId], onDelete: Restrict, onUpdate: Restrict, map: "owner_email_otp_membership_fkey")
+  enrollmentChallenge   OrganizationOwnerEnrollmentChallenge? @relation(fields: [organizationId, enrollmentChallengeId, userId], references: [organizationId, id, userId], onDelete: Restrict, onUpdate: Restrict, map: "owner_email_otp_enrollment_fkey")
+
+  @@unique([organizationId, userId, purpose], map: "owner_email_otp_scope_key")
+  @@map("owner_email_otp_challenges")
+}
+
 model OwnerSession {
   id                    String                                @id(map: "owner_sessions_pkey") @default(uuid()) @db.Uuid
   userId                String                                @map("user_id") @db.Uuid
