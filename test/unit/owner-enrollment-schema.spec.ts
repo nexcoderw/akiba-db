@@ -26,7 +26,10 @@ describe('owner enrollment and recipient acceptance schema', () => {
 		}
 		expect(challenge).toMatch(/failedAttempts\s+Int\s+@default\(0\)/u);
 		expect(challenge).toMatch(/maxAttempts\s+Int\s+@default\(5\)/u);
-		expect(challenge).not.toMatch(/PlatformStaff|password|rawToken|otp|cookie|sessionId/iu);
+		const otpRelation = /^[ \t]*ownerEmailOtpChallenges[ \t]+OwnerEmailOtpChallenge\[\][ \t]*$/mu;
+		expect(challenge).toMatch(otpRelation);
+		const fields = challenge.replace(otpRelation, '');
+		expect(fields).not.toMatch(/PlatformStaff|password|rawToken|otp|cookie|sessionId/iu);
 		expect(challenge).toContain('@@index([expiresAt, id]');
 	});
 
